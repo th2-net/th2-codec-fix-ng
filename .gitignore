@@ -1,0 +1,6 @@
+build/
+shared/
+.gradle/
+.idea/
+logs/
+out/
