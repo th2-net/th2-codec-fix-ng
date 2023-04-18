@@ -21,5 +21,6 @@ import java.nio.charset.Charset
 
 data class FixNgCodecSettings(
     val beginString: String = "FIXT1.1",
+    val dictionary: String,
     val charset: Charset = Charsets.US_ASCII,
 ) : IPipelineCodecSettings

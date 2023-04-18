@@ -15,8 +15,7 @@ apply plugin: 'application'
 apply plugin: 'com.palantir.docker'
 
 ext {
-    sharedDir = file("${project.rootDir}/shared")
-    sailfishVersion = '3.3.54'
+    sailfishVersion = '3.3.77'
     commonVersion   = '5.2.0-separate-executor-+'
 }
 
@@ -34,11 +33,6 @@ ext.excludeSailfish = { rcd ->
 }
 
 repositories {
-    maven {
-        name 'MavenLocal'
-        url sharedDir
-    }
-
     maven {
         name 'Sonatype_snapshots'
         url 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
@@ -82,7 +76,7 @@ repositories {
     mavenCentral()
     mavenLocal()
 
-    configurations.all {
+    configurations.configureEach {
         resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
         resolutionStrategy.cacheDynamicVersionsFor 0, 'seconds'
     }
@@ -106,13 +100,16 @@ dependencies {
     api platform('com.exactpro.th2:bom:4.2.0')
 
     implementation "com.exactpro.th2:common:${commonVersion}"
-    
     implementation 'com.exactpro.th2:codec:5.2.0-new-proto-+'
-    implementation 'com.exactpro.th2:sailfish-utils:3.14.0'
 
-    implementation "com.exactpro.sf:service-http:${sailfishVersion}"
+    implementation ("com.exactpro.sf:sailfish-common:${sailfishVersion}") {
+        exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml' // because of the vulnerability
+        exclude group: 'com.exactpro.mina', module: 'apache-mina-core' // because of the vulnerability
+    }
 
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${kotlin_version}"
+
+    implementation 'io.netty:netty-buffer'
+
     implementation "org.jetbrains.kotlin:kotlin-reflect:${kotlin_version}"
     implementation 'io.github.microutils:kotlin-logging'
 

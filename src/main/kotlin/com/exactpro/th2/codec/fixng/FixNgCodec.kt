@@ -16,11 +16,11 @@
 
 package com.exactpro.th2.codec.fixng
 
+import com.exactpro.sf.common.messages.structures.DictionaryConstants.FIELD_MESSAGE_TYPE
 import com.exactpro.sf.common.messages.structures.IDictionaryStructure
 import com.exactpro.sf.common.messages.structures.IFieldStructure
 import com.exactpro.sf.common.messages.structures.IMessageStructure
 import com.exactpro.sf.common.messages.structures.StructureUtils
-import com.exactpro.sf.extensions.messageType
 import com.exactpro.th2.codec.api.IPipelineCodec
 import com.exactpro.th2.codec.fixng.FixNgCodecFactory.Companion.PROTOCOL
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.MessageGroup
@@ -252,7 +252,7 @@ class FixNgCodec(messages: List<Message>, settings: FixNgCodecSettings) : IPipel
 
         private fun IMessageStructure.toMessage(): Message = Message(
             name = name,
-            type = messageType ?: name,
+            type = StructureUtils.getAttributeValue(this, FIELD_MESSAGE_TYPE) ?: name,
             fields = toFields(),
             isRequired = isRequired
         )

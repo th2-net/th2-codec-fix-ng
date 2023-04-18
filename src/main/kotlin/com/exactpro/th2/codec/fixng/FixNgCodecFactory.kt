@@ -16,32 +16,39 @@
 
 package com.exactpro.th2.codec.fixng
 
-import com.exactpro.sf.common.messages.structures.IDictionaryStructure
 import com.exactpro.sf.common.messages.structures.loaders.XmlDictionaryStructureLoader
 import com.exactpro.th2.codec.api.IPipelineCodec
+import com.exactpro.th2.codec.api.IPipelineCodecContext
 import com.exactpro.th2.codec.api.IPipelineCodecFactory
 import com.exactpro.th2.codec.api.IPipelineCodecSettings
 import com.exactpro.th2.codec.fixng.FixNgCodec.Companion.toMessages
 import com.google.auto.service.AutoService
-import mu.KotlinLogging
-import java.io.InputStream
 
 @AutoService(IPipelineCodecFactory::class)
 class FixNgCodecFactory : IPipelineCodecFactory {
+    private lateinit var context: IPipelineCodecContext
+
     @Deprecated("Please migrate to the protocols property") override val protocol: String = PROTOCOL
     override val settingsClass: Class<out IPipelineCodecSettings> = FixNgCodecSettings::class.java
-    private lateinit var dictionary: IDictionaryStructure
 
-    override fun init(dictionary: InputStream) {
-        this.dictionary = dictionary.use(XmlDictionaryStructureLoader()::load)
+    override fun init(pipelineCodecContext: IPipelineCodecContext) {
+        this.context = pipelineCodecContext
     }
 
-    override fun create(settings: IPipelineCodecSettings?): IPipelineCodec = FixNgCodec(dictionary.toMessages(), requireNotNull(settings as? FixNgCodecSettings) {
-        "settings is not an instance of ${FixNgCodecSettings::class.java}: $settings"
-    })
+    override fun create(settings: IPipelineCodecSettings?): IPipelineCodec {
+        check(::context.isInitialized) { "'codecContext' was not loaded" }
+        val codecSettings = requireNotNull(settings as? FixNgCodecSettings) {
+            "settings is not an instance of ${FixNgCodecSettings::class.java}: ${settings?.let { it::class.java }}"
+        }
+        return FixNgCodec(
+            context[codecSettings.dictionary].use(XmlDictionaryStructureLoader()::load).toMessages(),
+            requireNotNull(codecSettings as? FixNgCodecSettings) {
+                "settings is not an instance of ${FixNgCodecSettings::class.java}: $codecSettings"
+            }
+        )
+    }
 
     companion object {
         const val PROTOCOL = "fix"
-        private val LOGGER = KotlinLogging.logger {}
     }
 }
