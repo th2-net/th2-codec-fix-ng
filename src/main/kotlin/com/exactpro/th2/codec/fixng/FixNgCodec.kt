@@ -116,7 +116,7 @@ class FixNgCodec(messages: List<Message>, settings: FixNgCodecSettings) : IPipel
                 eventId = message.eventId,
                 metadata = message.metadata,
                 protocol = PROTOCOL,
-                type = msgType,
+                type = messageDef.name,
                 body = body,
             )
         }

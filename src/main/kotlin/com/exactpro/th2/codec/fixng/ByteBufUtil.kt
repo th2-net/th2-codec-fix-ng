@@ -37,8 +37,8 @@ private fun Int.getDigitCount(): Int = when {
     else -> 10
 }
 
-private fun ByteBuf.printInt(value: Int, digits: Int = value.getDigitCount()): ByteBuf = apply {
-    var value = value
+private fun ByteBuf.printInt(sourceValue: Int, digits: Int = sourceValue.getDigitCount()): ByteBuf = apply {
+    var value = sourceValue
 
     ensureWritable(digits)
 
@@ -94,6 +94,7 @@ inline fun ByteBuf.forEachField(
         val offset = readerIndex()
         if (action(readTag(), readValue(charset))) continue
         readerIndex(offset)
+        break
     }
 }
 
