@@ -51,7 +51,7 @@ class FixNgCodec(messages: List<Message>, settings: FixNgCodecSettings) : IPipel
 
             val messageDef = messagesByName[message.type] ?: error("Unknown message name: ${message.type}")
 
-            val messageFields = message.body
+            val messageFields = message.body as MutableMap
             val headerFields = messageFields.remove(HEADER) as? Map<*, *> ?: mapOf<Any, Any>()
             val trailerFields = messageFields.remove(TRAILER) as? Map<*, *> ?: mapOf<Any, Any>()
 
