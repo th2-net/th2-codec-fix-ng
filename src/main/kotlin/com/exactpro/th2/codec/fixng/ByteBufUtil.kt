@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Exactpro (Exactpro Systems Limited)
+ * Copyright 2023-2024 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ private fun ByteBuf.printInt(sourceValue: Int, digits: Int = sourceValue.getDigi
     ensureWritable(digits)
 
     repeat(digits) { index ->
-        setByte(digits - index - 1, value % 10 + DIGIT_0)
+        setByte(digits - index - 1 + writerIndex(), value % 10 + DIGIT_0)
         value /= 10
     }
 
