@@ -72,7 +72,7 @@ repositories {
 
 dependencies {
     implementation "com.exactpro.th2:common:${commonVersion}"
-    implementation "com.exactpro.th2:codec:5.5.0-dev"
+    implementation "com.exactpro.th2:codec:5.6.0-th2-gradle-plugin-0.1.1-10038884311-85c9dab-SNAPSHOT"
 
     implementation ("com.exactpro.sf:sailfish-common:${sailfishVersion}") {
         exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml' // because of the vulnerability
@@ -90,7 +90,6 @@ dependencies {
 
     testImplementation "org.junit.jupiter:junit-jupiter:5.10.3"
     testImplementation "org.jetbrains.kotlin:kotlin-test-junit5:1.8.22"
-    testImplementation 'org.mockito.kotlin:mockito-kotlin:5.4.0'
 }
 
 test {
