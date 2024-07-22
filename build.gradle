@@ -76,8 +76,8 @@ dependencies {
 
     implementation ("com.exactpro.sf:sailfish-common:${sailfishVersion}") {
         exclude group: "commons-configuration", module: "commons-configuration" // because of the vulnerability
-        exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-yaml' // because of the vulnerability
-        exclude group: 'com.exactpro.mina', module: 'apache-mina-core' // because of the vulnerability
+        exclude group: "com.fasterxml.jackson.dataformat", module: "jackson-dataformat-yaml" // because of the vulnerability
+        exclude group: "com.exactpro.mina", module: "apache-mina-core" // because of the vulnerability
     }
 
     implementation "io.netty:netty-buffer"
@@ -93,14 +93,6 @@ dependencies {
     testImplementation "org.jetbrains.kotlin:kotlin-test-junit5:1.8.22"
 }
 
-test {
-    useJUnitPlatform()
-}
-
-application {
-    mainClassName 'com.exactpro.th2.codec.MainKt'
-}
-
-dependencyCheck {
-    suppressionFile = file('suppressions.xml')
-}
+test.useJUnitPlatform()
+application.mainClass = "com.exactpro.th2.codec.MainKt"
+dependencyCheck.suppressionFile = file('suppressions.xml')
