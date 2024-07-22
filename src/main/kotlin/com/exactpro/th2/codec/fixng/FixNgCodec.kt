@@ -213,7 +213,6 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 field.tag != TAG_MSG_TYPE
             ) {
                 if (!isCompatibleType(value::class.java, field.primitiveType)) {
-                    // TODO: 2.2
                     if (isDirty) {
                         context.warning("Dirty mode WARNING: Wrong type value in field ${field.name}. Actual: ${value.javaClass} (value: $value). Expected ${field.primitiveType}")
                     } else {
@@ -222,7 +221,6 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 }
 
                 if (field.values.isNotEmpty() && !field.values.contains(value)) {
-                    // TODO: 2.1
                     if (isDirty) {
                         context.warning("Dirty mode WARNING: Wrong value in field ${field.name}. Actual: $value. Expected ${field.values}.")
                     } else {
@@ -274,7 +272,6 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 encodeField(field, value, target, isDirty, dictionaryFields, context)
             } else if (field.isRequired) {
                 if (isDirty) {
-                    // TODO: C1 (1.5.1)
                     context.warning("Dirty mode WARNING: Required field missing. Field name: $name. Message body: $source")
                 } else {
                     error("Required field missing: $name. Message body: $source")
@@ -290,13 +287,11 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             val field = dictionaryFields[fieldName]
 
             if (field != null) {
-                // TODO: A1 (1.1.1)
                 context.warning("Dirty mode WARNING: Unexpected field in message. Field name: $fieldName. Field value: $value. Message body: $source")
                 encodeField(field, value ?: "", target, true, dictionaryFields, context)
             } else {
                 val tag = fieldName.toIntOrNull()
                 if(tag != null && tag > 0) {
-                    // TODO: A3 (1.1.3)
                     if (value is List<*>) { // TODO: do we need this check?
                         error("List value with unspecified name. tag = $tag")
                     } else {
@@ -304,7 +299,6 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                         target.writeField(tag, value, charset)
                     }
                 } else {
-                    // TODO: A2 (1.1.2)
                     error("Field does not exist in dictionary. Field name: $fieldName. Field value: $value. Message body: $source")
                 }
             }

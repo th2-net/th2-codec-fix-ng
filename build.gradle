@@ -99,3 +99,7 @@ test {
 application {
     mainClassName 'com.exactpro.th2.codec.MainKt'
 }
+
+dependencyCheck {
+    suppressionFile = file('suppressions.xml')
+}
