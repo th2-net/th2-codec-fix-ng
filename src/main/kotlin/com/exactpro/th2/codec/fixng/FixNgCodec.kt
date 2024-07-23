@@ -46,22 +46,22 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     private val charset = settings.charset
 
     private val fieldsEncode = convertToFields(dictionary.fields, true)
-    private val messagesByTypeForEncode: Map<String, Message>
     private val messagesByTypeForDecode: Map<String, Message>
     private val messagesByNameForEncode: Map<String, Message>
-    private val messagesByNameForDecode: Map<String, Message>
+
+    private val headerDef: Message
+    private val trailerDef: Message
 
     init {
-        val messagesForEncode = dictionary.toMessages(true)
-        val messagesForDecode = dictionary.toMessages(false)
-        messagesByTypeForEncode = messagesForEncode.associateBy(Message::type)
+        val messagesForEncode = dictionary.toMessages(isForEncode = true)
+        val messagesForDecode = dictionary.toMessages(isForEncode = false)
         messagesByTypeForDecode = messagesForDecode.associateBy(Message::type)
         messagesByNameForEncode = messagesForEncode.associateBy(Message::name)
-        messagesByNameForDecode = messagesForDecode.associateBy(Message::name)
-    }
 
-    private val headerDef = messagesByNameForDecode[HEADER] ?: error("Header is not defined in dictionary")
-    private val trailerDef = messagesByNameForDecode[TRAILER] ?: error("Trailer is not defined in dictionary")
+        val messagesByNameForDecode = messagesForDecode.associateBy(Message::name)
+        headerDef = messagesByNameForDecode[HEADER] ?: error("Header is not defined in dictionary")
+        trailerDef = messagesByNameForDecode[TRAILER] ?: error("Trailer is not defined in dictionary")
+    }
 
     override fun encode(messageGroup: MessageGroup, context: IReportingContext): MessageGroup {
         val messages = mutableListOf<CommonMessage<*>>()
@@ -75,11 +75,11 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             val isDirty = message.metadata[ENCODE_MODE_PROPERTY_NAME] == DIRTY_ENCODE_MODE
             val messageDef = messagesByNameForEncode[message.type] ?: error("Unknown message name: ${message.type}")
 
-            val messageFields = message.body as MutableMap
+            val messageFields = message.body
             @Suppress("UNCHECKED_CAST")
-            val headerFields = messageFields.remove(HEADER) as? Map<String, *> ?: mapOf<String, Any>()
+            val headerFields = messageFields[HEADER] as? Map<String, *> ?: mapOf<String, Any>()
             @Suppress("UNCHECKED_CAST")
-            val trailerFields = messageFields.remove(TRAILER) as? Map<String, *> ?: mapOf<String, Any>()
+            val trailerFields = messageFields[TRAILER] as? Map<String, *> ?: mapOf<String, Any>()
 
             val body = Unpooled.buffer(1024)
             val prefix = Unpooled.buffer(32)
@@ -88,7 +88,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             body.writeField(TAG_MSG_TYPE, messageDef.type, charset)
 
             headerDef.encode(headerFields, body, isDirty, fieldsEncode, context)
-            messageDef.encode(messageFields, body, isDirty, fieldsEncode, context)
+            messageDef.encode(messageFields, body, isDirty, fieldsEncode, context, setOf(HEADER, TRAILER))
             trailerDef.encode(trailerFields, body, isDirty, fieldsEncode, context)
 
             prefix.writeField(TAG_BODY_LENGTH, body.readableBytes(), charset)
@@ -265,7 +265,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         }
     }
 
-    private fun FieldMap.encode(source: Map<String, *>, target: ByteBuf, isDirty: Boolean, dictionaryFields: Map<String, Field>, context: IReportingContext) {
+    private fun FieldMap.encode(source: Map<String, *>, target: ByteBuf, isDirty: Boolean, dictionaryFields: Map<String, Field>, context: IReportingContext, fieldsToSkip: Set<String> = emptySet()) {
         fields.forEach { (name, field) ->
             val value = source[name]
             if (value != null) {
@@ -279,7 +279,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             }
         }
 
-        source.filter { fields[it.key] == null }.forEach { (fieldName, value) ->
+        source.filter { fields[it.key] == null && it.key !in fieldsToSkip}.forEach { (fieldName, value) ->
             if (!isDirty) {
                 error("Unexpected field in message. Field name: $fieldName. Field value: $value. Message body: $source")
             }
