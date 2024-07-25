@@ -37,6 +37,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeFormatterBuilder
+import java.time.format.DateTimeParseException
 import java.time.temporal.ChronoField
 import java.util.EnumMap
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.Message as CommonMessage
@@ -116,6 +117,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 continue
             }
 
+            val isDirty = message.metadata[ENCODE_MODE_PROPERTY_NAME] == DIRTY_ENCODE_MODE
             val buffer = message.body
 
             val beginString = buffer.readField(TAG_BEGIN_STRING, charset) { "Message starts with $it tag instead of BeginString ($TAG_BEGIN_STRING)" }
@@ -124,9 +126,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
             val messageDef = messagesByTypeForDecode[msgType] ?: error("Unknown message type: $msgType")
 
-            val header = headerDef.decode(buffer, context)
-            val body = messageDef.decode(buffer, context)
-            val trailer = trailerDef.decode(buffer, context)
+            val header = headerDef.decode(buffer, isDirty, context)
+            val body = messageDef.decode(buffer, isDirty, context)
+            val trailer = trailerDef.decode(buffer, isDirty, context)
 
             if (buffer.isReadable) error("Tag appears out of order: ${buffer.readTag()}")
 
@@ -150,54 +152,113 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         return MessageGroup(messages)
     }
 
-    private fun Field.decode(source: ByteBuf, target: MutableMap<String, Any>, value: String, tag: Int, context: IReportingContext) {
-        val previous = when (this) {
-            is Primitive -> {
-                val decodedValue = when (primitiveType) {
-                    java.lang.String::class.java -> value
-                    java.lang.Character::class.java -> {
-                        check(value.length == 1) { "Wrong value" }
-                        value[0]
+    private fun processDecodeError(value: Any, isDirty: Boolean, context: IReportingContext, errorMessageText: String) = if (isDirty) {
+        context.warning("Dirty mode decoding WARNING: $errorMessageText")
+        value
+    } else {
+        error(errorMessageText)
+    }
+
+    private fun Field.decode(
+        source: ByteBuf,
+        target: MutableMap<String, Any>,
+        value: String,
+        tag: Int,
+        isDirty: Boolean,
+        context: IReportingContext
+    ) {
+        val decodedValue: Any = if (value.isEmpty()) {
+            processDecodeError(value, isDirty, context, "Empty value in the field '$name'.")
+        } else if (containsNonPrintableChars(value)) {
+            processDecodeError(value, isDirty, context, "Non printable characters in the field '$name'. Value: $value")
+        } else {
+            when (this) {
+                is Primitive -> {
+                    try {
+                        val primitiveValue = when (primitiveType) {
+                            java.lang.String::class.java -> value
+                            java.lang.Character::class.java -> {
+                                if (value.length != 1) {
+                                    processDecodeError(value, isDirty, context, "Wrong value in character field '$name'. Value: $value")
+                                } else {
+                                    value[0]
+                                }
+                            }
+
+                            java.lang.Integer::class.java -> value.toInt()
+                            java.math.BigDecimal::class.java -> value.toBigDecimal()
+                            java.lang.Long::class.java -> value.toLong()
+                            java.lang.Short::class.java -> value.toShort()
+                            java.lang.Byte::class.java -> value.toByte()
+                            java.lang.Float::class.java -> value.toFloat()
+                            java.lang.Double::class.java -> value.toDouble()
+
+                            java.time.LocalDateTime::class.java -> LocalDateTime.parse(value, dateTimeFormatter)
+                            java.time.LocalDate::class.java -> LocalDate.parse(value, dateFormatter)
+                            java.time.LocalTime::class.java -> LocalTime.parse(value, timeFormatter)
+
+                            java.lang.Boolean::class.java -> when (value) {
+                                "Y" -> true
+                                "N" -> false
+                                else -> processDecodeError(value, isDirty, context, "Wrong value in boolean field '$name'. Value: $value.")
+                            }
+
+                            else -> error("Unsupported type: $primitiveType.")
+                        }
+
+                        if (values.isEmpty() || values.contains(primitiveValue)) {
+                            primitiveValue
+                        } else {
+                            processDecodeError(primitiveValue, isDirty, context, "Wrong value in field $name. Actual: $value. Expected $values.")
+                        }
+                    } catch (e: NumberFormatException) {
+                        processDecodeError(value, isDirty, context, "Wrong number value in ${primitiveType.name} field '$name'. Value: $value.")
+                    } catch (e: DateTimeParseException) {
+                        processDecodeError(value, isDirty, context, "Wrong date/time value in ${primitiveType.name} field '$name'. Value: $value.")
                     }
-                    java.lang.Integer::class.java -> value.toInt()
-                    java.math.BigDecimal::class.java -> value.toBigDecimal()
-                    java.lang.Long::class.java -> value.toLong()
-                    java.lang.Short::class.java -> value.toShort()
-                    java.lang.Byte::class.java -> value.toByte()
-                    java.lang.Boolean::class.java -> value.toBoolean()
-                    java.lang.Float::class.java -> value.toFloat()
-                    java.lang.Double::class.java -> value.toDouble()
-                    java.time.LocalDateTime::class.java -> LocalDateTime.parse(value, dateTimeFormatter)
-                    java.time.LocalDate::class.java -> LocalDate.parse(value, dateFormatter)
-                    java.time.LocalTime::class.java -> LocalTime.parse(value, timeFormatter)
-                    else -> error("Unsupported type: ${this.primitiveType}")
                 }
 
-                target.put(name, decodedValue)
+                is Group -> decode(
+                    source,
+                    value.toIntOrNull() ?: error("Invalid $name group counter ($tag) value: $value"),
+                    isDirty,
+                    context
+                )
+
+                else -> error("Unsupported field type: $this")
             }
-            is Group -> target.put(name, decode(source, value.toIntOrNull() ?: error("Invalid $name group counter ($tag) value: $value"), context))
-            else -> error("Unsupported field type: $this")
         }
 
+        // in dirty mode we'll use tag as field name if we have field duplication
+        val fieldName = if (isDirty && target.contains(name)) {
+            tag.toString()
+        } else {
+            name
+        }
+
+        val previous = target.put(fieldName, decodedValue)
+
+        // but even in dirty mode we can't write field if it's duplicated more than once
+        // because we use Map and it cant contain duplicates
         check(previous == null) { "Duplicate $name field ($tag) with value: $value (previous: $previous)" }
     }
 
-    private fun Message.decode(source: ByteBuf, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
+    private fun Message.decode(source: ByteBuf, isDirty: Boolean, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
         source.forEachField(charset) { tag, value ->
             val field = get(tag) ?: return@forEachField false
-            field.decode(source, map, value, tag, context)
+            field.decode(source, map, value, tag, isDirty, context)
             return@forEachField true
         }
     }
 
-    private fun Group.decode(source: ByteBuf, count: Int, context: IReportingContext): List<Map<String, Any>> = ArrayList<Map<String, Any>>().also { list ->
+    private fun Group.decode(source: ByteBuf, count: Int, isDirty: Boolean, context: IReportingContext): List<Map<String, Any>> = ArrayList<Map<String, Any>>().also { list ->
         var map: MutableMap<String, Any>? = null
 
         source.forEachField(charset) { tag, value ->
             val field = get(tag) ?: return@forEachField false
             if (tag == delimiter) map = mutableMapOf<String, Any>().also(list::add)
             val group = checkNotNull(map) { "Field ${field.name} ($tag) appears before delimiter ($delimiter)" }
-            field.decode(source, group, value, tag, context)
+            field.decode(source, group, value, tag, isDirty, context)
             return@forEachField true
         }
 
@@ -244,11 +305,11 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                     }
                 }
 
-                if (!stringValue.asSequence().all { it in ' ' .. '~' }) {
+                if (containsNonPrintableChars(stringValue)) {
                     if (isDirty) {
                         context.warning("Dirty mode WARNING: Non printable characters in the field '${field.name}'. Value: $value")
                     } else {
-                        error("Dirty mode WARNING: Non printable characters in the field '${field.name}'. Value: $value")
+                        error("Non printable characters in the field '${field.name}'. Value: $value")
                     }
                 }
 
@@ -315,6 +376,8 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             encode(groupMap, target, isDirty, dictionaryFields, context)
         }
     }
+
+    private fun containsNonPrintableChars(stringValue: String) = stringValue.any { it !in ' ' .. '~' }
 
     interface Field {
         val isRequired: Boolean

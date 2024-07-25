@@ -59,16 +59,16 @@ class FixNgCodecTest {
     fun `simple test decode encode`() {
         listOf(
             // EXECUTION_REPORT
-            RawMessage(body = Unpooled.wrappedBuffer("8=FIXT.1.1\u00019=156\u000135=8\u000134=10947\u000149=SENDER\u000152=20230419-10:36:07.415088\u000156=RECEIVER\u00011=test\u000111=zSuNbrBIZyVljs\u000138=500\u000139=0\u000140=A\u000141=zSuNbrBIZyVljs\u000144=1000\u000147=500\u000154=B\u000155=ABC\u000159=M\u000110=012\u0001".toByteArray())),
+            RawMessage(body = Unpooled.wrappedBuffer("8=FIXT.1.1\u00019=156\u000135=8\u000134=10947\u000149=SENDER\u000152=20230419-10:36:07.415088\u000156=RECEIVER\u00011=test\u000111=zSuNbrBIZyVljs\u000138=500\u000139=0\u000140=A\u000141=zSuNbrBIZyVljs\u000144=1000\u000147=500\u000154=B\u000155=ABC\u000159=0\u000110=012\u0001".toByteArray())),
             // ORDER_SINGLE
-            RawMessage(body = Unpooled.wrappedBuffer("8=FIXT.1.1\u00019=133\u000135=D\u000134=11005\u000149=SENDER\u000152=20230419-10:36:07.415088\u000156=RECEIVER\u00011=test\u000111=UsVpSVQIcuqjQe\u000138=500\u000140=A\u000144=1000\u000147=500\u000154=B\u000155=ABC\u000159=M\u000110=000\u0001".toByteArray())),
+            RawMessage(body = Unpooled.wrappedBuffer("8=FIXT.1.1\u00019=133\u000135=D\u000134=11005\u000149=SENDER\u000152=20230419-10:36:07.415088\u000156=RECEIVER\u00011=test\u000111=UsVpSVQIcuqjQe\u000138=500\u000140=A\u000144=1000\u000147=500\u000154=B\u000155=ABC\u000159=0\u000110=000\u0001".toByteArray())),
         ).forEach { source ->
             codec.decode(MessageGroup(mutableListOf(source)), reportingContext).also { group ->
                 assertEquals(1, group.messages.size)
             }.messages.first().also { decoded ->
                 assertTrue(decoded is ParsedMessage)
 //                TODO: uncomment when encode will be done
-//                codec.encode(MessageGroup(mutableListOf(decoded))).also { group ->
+//                codec.encode(MessageGroup(mutableListOf(decoded)), reportingContext).also { group ->
 //                    assertEquals(1, group.messages.size)
 //                }.messages.first().also { encoded ->
 //                    assertTrue(encoded is RawMessage)
