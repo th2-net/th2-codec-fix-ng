@@ -120,9 +120,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             val isDirty = message.metadata[ENCODE_MODE_PROPERTY_NAME] == DIRTY_ENCODE_MODE
             val buffer = message.body
 
-            val beginString = buffer.readField(TAG_BEGIN_STRING, charset) { "Message starts with $it tag instead of BeginString ($TAG_BEGIN_STRING)" }
-            val bodyLength = buffer.readField(TAG_BODY_LENGTH, charset) { "BeginString ($TAG_BEGIN_STRING) is followed by $it tag instead of BodyLength ($TAG_BODY_LENGTH)" }
-            val msgType = buffer.readField(TAG_MSG_TYPE, charset) { "BodyLength ($TAG_BODY_LENGTH) is followed by $it tag instead of MsgType ($TAG_MSG_TYPE)" }
+            val beginString = buffer.readField(TAG_BEGIN_STRING, charset, isDirty) { "Message starts with $it tag instead of BeginString ($TAG_BEGIN_STRING)" }
+            val bodyLength = buffer.readField(TAG_BODY_LENGTH, charset, isDirty) { "BeginString ($TAG_BEGIN_STRING) is followed by $it tag instead of BodyLength ($TAG_BODY_LENGTH)" }
+            val msgType = buffer.readField(TAG_MSG_TYPE, charset, isDirty) { "BodyLength ($TAG_BODY_LENGTH) is followed by $it tag instead of MsgType ($TAG_MSG_TYPE)" }
 
             val messageDef = messagesByTypeForDecode[msgType] ?: error("Unknown message type: $msgType")
 
@@ -167,57 +167,11 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         isDirty: Boolean,
         context: IReportingContext
     ) {
-        val decodedValue: Any = if (value.isEmpty()) {
-            processDecodeError(value, isDirty, context, "Empty value in the field '$name'.")
-        } else if (containsNonPrintableChars(value)) {
-            processDecodeError(value, isDirty, context, "Non printable characters in the field '$name'. Value: $value")
-        } else {
-            when (this) {
-                is Primitive -> {
-                    try {
-                        val primitiveValue = when (primitiveType) {
-                            java.lang.String::class.java -> value
-                            java.lang.Character::class.java -> {
-                                if (value.length != 1) {
-                                    processDecodeError(value, isDirty, context, "Wrong value in character field '$name'. Value: $value")
-                                } else {
-                                    value[0]
-                                }
-                            }
-
-                            java.lang.Integer::class.java -> value.toInt()
-                            java.math.BigDecimal::class.java -> value.toBigDecimal()
-                            java.lang.Long::class.java -> value.toLong()
-                            java.lang.Short::class.java -> value.toShort()
-                            java.lang.Byte::class.java -> value.toByte()
-                            java.lang.Float::class.java -> value.toFloat()
-                            java.lang.Double::class.java -> value.toDouble()
-
-                            java.time.LocalDateTime::class.java -> LocalDateTime.parse(value, dateTimeFormatter)
-                            java.time.LocalDate::class.java -> LocalDate.parse(value, dateFormatter)
-                            java.time.LocalTime::class.java -> LocalTime.parse(value, timeFormatter)
-
-                            java.lang.Boolean::class.java -> when (value) {
-                                "Y" -> true
-                                "N" -> false
-                                else -> processDecodeError(value, isDirty, context, "Wrong value in boolean field '$name'. Value: $value.")
-                            }
-
-                            else -> error("Unsupported type: $primitiveType.")
-                        }
-
-                        if (values.isEmpty() || values.contains(primitiveValue)) {
-                            primitiveValue
-                        } else {
-                            processDecodeError(primitiveValue, isDirty, context, "Wrong value in field $name. Actual: $value. Expected $values.")
-                        }
-                    } catch (e: NumberFormatException) {
-                        processDecodeError(value, isDirty, context, "Wrong number value in ${primitiveType.name} field '$name'. Value: $value.")
-                    } catch (e: DateTimeParseException) {
-                        processDecodeError(value, isDirty, context, "Wrong date/time value in ${primitiveType.name} field '$name'. Value: $value.")
-                    }
-                }
-
+        val decodedValue: Any = when {
+            value.isEmpty() -> processDecodeError(value, isDirty, context, "Empty value in the field '$name'.")
+            containsNonPrintableChars(value) -> processDecodeError(value, isDirty, context, "Non printable characters in the field '$name'. Value: $value")
+            else -> when (this) {
+                is Primitive -> decode(value, isDirty, context)
                 is Group -> decode(
                     source,
                     value.toIntOrNull() ?: error("Invalid $name group counter ($tag) value: $value"),
@@ -244,17 +198,62 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     }
 
     private fun Message.decode(source: ByteBuf, isDirty: Boolean, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
-        source.forEachField(charset) { tag, value ->
+        source.forEachField(charset, isDirty) { tag, value ->
             val field = get(tag) ?: return@forEachField false
             field.decode(source, map, value, tag, isDirty, context)
             return@forEachField true
         }
     }
 
+    private fun Primitive.decode(value: String, isDirty: Boolean, context: IReportingContext): Any {
+        return try {
+            val primitiveValue = when (primitiveType) {
+                java.lang.String::class.java -> value
+                java.lang.Character::class.java -> {
+                    if (value.length != 1) {
+                        processDecodeError(value, isDirty, context, "Wrong value in character field '$name'. Value: $value")
+                    } else {
+                        value[0]
+                    }
+                }
+
+                java.lang.Integer::class.java -> value.toInt()
+                java.math.BigDecimal::class.java -> value.toBigDecimal()
+                java.lang.Long::class.java -> value.toLong()
+                java.lang.Short::class.java -> value.toShort()
+                java.lang.Byte::class.java -> value.toByte()
+                java.lang.Float::class.java -> value.toFloat()
+                java.lang.Double::class.java -> value.toDouble()
+
+                java.time.LocalDateTime::class.java -> LocalDateTime.parse(value, dateTimeFormatter)
+                java.time.LocalDate::class.java -> LocalDate.parse(value, dateFormatter)
+                java.time.LocalTime::class.java -> LocalTime.parse(value, timeFormatter)
+
+                java.lang.Boolean::class.java -> when (value) {
+                    "Y" -> true
+                    "N" -> false
+                    else -> processDecodeError(value, isDirty, context, "Wrong value in boolean field '$name'. Value: $value.")
+                }
+
+                else -> error("Unsupported type: $primitiveType.")
+            }
+
+            if (values.isEmpty() || values.contains(primitiveValue)) {
+                primitiveValue
+            } else {
+                processDecodeError(primitiveValue, isDirty, context, "Wrong value in field $name. Actual: $value. Expected $values.")
+            }
+        } catch (e: NumberFormatException) {
+            processDecodeError(value, isDirty, context, "Wrong number value in ${primitiveType.name} field '$name'. Value: $value.")
+        } catch (e: DateTimeParseException) {
+            processDecodeError(value, isDirty, context, "Wrong date/time value in ${primitiveType.name} field '$name'. Value: $value.")
+        }
+    }
+
     private fun Group.decode(source: ByteBuf, count: Int, isDirty: Boolean, context: IReportingContext): List<Map<String, Any>> = ArrayList<Map<String, Any>>().also { list ->
         var map: MutableMap<String, Any>? = null
 
-        source.forEachField(charset) { tag, value ->
+        source.forEachField(charset, isDirty) { tag, value ->
             val field = get(tag) ?: return@forEachField false
             if (tag == delimiter) map = mutableMapOf<String, Any>().also(list::add)
             val group = checkNotNull(map) { "Field ${field.name} ($tag) appears before delimiter ($delimiter)" }
@@ -275,7 +274,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             ) {
                 if (!isCompatibleType(value::class.java, field.primitiveType)) {
                     if (isDirty) {
-                        context.warning("Dirty mode WARNING: Wrong type value in field ${field.name}. Actual: ${value.javaClass} (value: $value). Expected ${field.primitiveType}")
+                        context.warning("Dirty mode encoding WARNING: Wrong type value in field ${field.name}. Actual: ${value.javaClass} (value: $value). Expected ${field.primitiveType}")
                     } else {
                         error("Wrong type value in field ${field.name}. Actual: ${value.javaClass}. Expected ${field.primitiveType}")
                     }
@@ -283,7 +282,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
                 if (field.values.isNotEmpty() && !field.values.contains(value)) {
                     if (isDirty) {
-                        context.warning("Dirty mode WARNING: Wrong value in field ${field.name}. Actual: $value. Expected ${field.values}.")
+                        context.warning("Dirty mode encoding WARNING: Wrong value in field ${field.name}. Actual: $value. Expected ${field.values}.")
                     } else {
                         error("Wrong value in field ${field.name}. Expected ${field.values}. Actual: $value")
                     }
@@ -299,7 +298,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
                 if (stringValue.isEmpty()) {
                     if (isDirty) {
-                        context.warning("Dirty mode WARNING: Empty value in the field '${field.name}'.")
+                        context.warning("Dirty mode encoding WARNING: Empty value in the field '${field.name}'.")
                     } else {
                         error("Empty value in the field '${field.name}'")
                     }
@@ -307,7 +306,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
                 if (containsNonPrintableChars(stringValue)) {
                     if (isDirty) {
-                        context.warning("Dirty mode WARNING: Non printable characters in the field '${field.name}'. Value: $value")
+                        context.warning("Dirty mode encoding WARNING: Non printable characters in the field '${field.name}'. Value: $value")
                     } else {
                         error("Non printable characters in the field '${field.name}'. Value: $value")
                     }

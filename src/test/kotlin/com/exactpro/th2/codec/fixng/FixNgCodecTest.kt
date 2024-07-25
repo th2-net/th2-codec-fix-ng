@@ -56,40 +56,25 @@ class FixNgCodecTest {
     }
 
     @Test
-    fun `simple test decode encode`() {
-        listOf(
-            // EXECUTION_REPORT
-            RawMessage(body = Unpooled.wrappedBuffer("8=FIXT.1.1\u00019=156\u000135=8\u000134=10947\u000149=SENDER\u000152=20230419-10:36:07.415088\u000156=RECEIVER\u00011=test\u000111=zSuNbrBIZyVljs\u000138=500\u000139=0\u000140=A\u000141=zSuNbrBIZyVljs\u000144=1000\u000147=500\u000154=B\u000155=ABC\u000159=0\u000110=012\u0001".toByteArray())),
-            // ORDER_SINGLE
-            RawMessage(body = Unpooled.wrappedBuffer("8=FIXT.1.1\u00019=133\u000135=D\u000134=11005\u000149=SENDER\u000152=20230419-10:36:07.415088\u000156=RECEIVER\u00011=test\u000111=UsVpSVQIcuqjQe\u000138=500\u000140=A\u000144=1000\u000147=500\u000154=B\u000155=ABC\u000159=0\u000110=000\u0001".toByteArray())),
-        ).forEach { source ->
-            codec.decode(MessageGroup(mutableListOf(source)), reportingContext).also { group ->
-                assertEquals(1, group.messages.size)
-            }.messages.first().also { decoded ->
-                assertTrue(decoded is ParsedMessage)
-//                TODO: uncomment when encode will be done
-//                codec.encode(MessageGroup(mutableListOf(decoded)), reportingContext).also { group ->
-//                    assertEquals(1, group.messages.size)
-//                }.messages.first().also { encoded ->
-//                    assertTrue(encoded is RawMessage)
-//                    assertEquals(source, encoded)
-//                }
-            }
-        }
-    }
-
-    @Test
-    fun encode() {
+    fun `simple encode`() {
+        (parsedMessage.metadata as MutableMap).remove("encode-mode")
         val encoded = codec.encode(MessageGroup(listOf(parsedMessage)), reportingContext)
         val body = encoded.messages.first().body as CompositeByteBuf
         val fixMsg = body.toString(StandardCharsets.US_ASCII)
-        assertEquals(
-            "8=FIXT1.1\u00019=295\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=145\u0001",
-            fixMsg
+
+        assertEquals(MSG_CORRECT, fixMsg)
+        assertEquals(0, reportingContext.warnings.size)
+    }
+
+    @Test
+    fun `simple decode`() {
+        val rawMessage = RawMessage(
+            body = Unpooled.wrappedBuffer(MSG_CORRECT.toByteArray(Charsets.US_ASCII))
         )
 
-        val redecoded = codec.decode(encoded, reportingContext)
-        assertTrue { redecoded.messages.first() is ParsedMessage }
+        val decoded = codec.decode(MessageGroup(listOf(rawMessage)), reportingContext)
+        assertEquals(0, reportingContext.warnings.size)
+        assertTrue { decoded.messages.first() is ParsedMessage }
     }
 
     @Test
@@ -158,29 +143,47 @@ class FixNgCodecTest {
         val encoded = codec.encode(MessageGroup(listOf(parsedMessage)), reportingContext)
         val body = encoded.messages.first().body as CompositeByteBuf
         val fixMsg = body.toString(StandardCharsets.US_ASCII)
-        assertEquals(
-            "8=FIXT1.1\u00019=295\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=X\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=185\u0001",
-            fixMsg
+        assertEquals(MSG_WRONG_ENUM, fixMsg)
+        assertEquals(1, reportingContext.warnings.size)
+        assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode encoding WARNING: Wrong value in field ExecType. Actual: X.") }
+    }
+
+    @Test
+    fun `decode with wrong enum value`() {
+        val rawMessage = RawMessage(
+            metadata = mapOf("encode-mode" to "dirty"),
+            body = Unpooled.wrappedBuffer(MSG_WRONG_ENUM.toByteArray(Charsets.US_ASCII))
         )
 
+        codec.decode(MessageGroup(listOf(rawMessage)), reportingContext)
+
         assertEquals(1, reportingContext.warnings.size)
-        assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode WARNING: Wrong value in field ExecType. Actual: X.") }
+        assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode decoding WARNING: Wrong value in field ExecType. Actual: X.") }
     }
 
     @Test
     fun `encode with wrong value type`() {
-        messageBody["LeavesQty"]="500" // String instead of BigDecimal
+        messageBody["LeavesQty"]="Five" // String instead of BigDecimal
 
         val encoded = codec.encode(MessageGroup(listOf(parsedMessage)), reportingContext)
         val body = encoded.messages.first().body as CompositeByteBuf
         val fixMsg = body.toString(StandardCharsets.US_ASCII)
-        assertEquals(
-            "8=FIXT1.1\u00019=295\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=145\u0001",
-            fixMsg
+        assertEquals(MSG_WRONG_TYPE, fixMsg)
+        assertEquals(1, reportingContext.warnings.size)
+        assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode encoding WARNING: Wrong type value in field LeavesQty. Actual: class java.lang.String (value: Five). Expected class java.math.BigDecimal") }
+    }
+
+    @Test
+    fun `decode with empty value type`() {
+        val rawMessage = RawMessage(
+            metadata = mapOf("encode-mode" to "dirty"),
+            body = Unpooled.wrappedBuffer(MSG_WRONG_TYPE.toByteArray(Charsets.US_ASCII))
         )
 
+        codec.decode(MessageGroup(listOf(rawMessage)), reportingContext)
+
         assertEquals(1, reportingContext.warnings.size)
-        assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode WARNING: Wrong type value in field LeavesQty. Actual: class java.lang.String (value: 500). Expected class java.math.BigDecimal") }
+        assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode decoding WARNING: Wrong number value in java.math.BigDecimal field 'LeavesQty'. Value: Five.") }
     }
 
     @Test
@@ -190,13 +193,22 @@ class FixNgCodecTest {
         val encoded = codec.encode(MessageGroup(listOf(parsedMessage)), reportingContext)
         val body = encoded.messages.first().body as CompositeByteBuf
         val fixMsg = body.toString(StandardCharsets.US_ASCII)
-        assertEquals(
-            "8=FIXT1.1\u00019=291\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=205\u0001",
-            fixMsg
+        assertEquals(MSG_EMPTY_VAL, fixMsg)
+        assertEquals(1, reportingContext.warnings.size)
+        assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode encoding WARNING: Empty value in the field 'Account'.") }
+    }
+
+    @Test
+    fun `decode with empty value`() {
+        val rawMessage = RawMessage(
+            metadata = mapOf("encode-mode" to "dirty"),
+            body = Unpooled.wrappedBuffer(MSG_EMPTY_VAL.toByteArray(Charsets.US_ASCII))
         )
 
+        codec.decode(MessageGroup(listOf(rawMessage)), reportingContext)
+
         assertEquals(1, reportingContext.warnings.size)
-        assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode WARNING: Empty value in the field 'Account'.") }
+        assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode decoding WARNING: Empty value in the field 'Account'.") }
     }
 
     @Test
@@ -206,13 +218,22 @@ class FixNgCodecTest {
         val encoded = codec.encode(MessageGroup(listOf(parsedMessage)), reportingContext)
         val body = encoded.messages.first().body as CompositeByteBuf
         val fixMsg = body.toString(StandardCharsets.US_ASCII)
-        assertEquals(
-            "8=FIXT1.1\u00019=303\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\taccount\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=125\u0001",
-            fixMsg
+        assertEquals(MSG_NON_PRINTABLE, fixMsg)
+        assertEquals(1, reportingContext.warnings.size)
+        assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode encoding WARNING: Non printable characters in the field 'Account'. Value: test\taccount") }
+    }
+
+    @Test
+    fun `decode with non printable characters`() {
+        val rawMessage = RawMessage(
+            metadata = mapOf("encode-mode" to "dirty"),
+            body = Unpooled.wrappedBuffer(MSG_NON_PRINTABLE.toByteArray(Charsets.US_ASCII))
         )
 
+        codec.decode(MessageGroup(listOf(rawMessage)), reportingContext)
+
         assertEquals(1, reportingContext.warnings.size)
-        assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode WARNING: Non printable characters in the field 'Account'. Value: test\taccount") }
+        assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode decoding WARNING: Non printable characters in the field 'Account'.") }
     }
 
     @Test
@@ -235,9 +256,9 @@ class FixNgCodecTest {
         MessageId("test_alias", Direction.OUTGOING, 0L, Instant.now(), emptyList()),
         EventId("test_id", "test_book", "test_scope", Instant.now()),
         "ExecutionReport",
-        mapOf("encode-mode" to "dirty"),
+        mutableMapOf("encode-mode" to "dirty"),
         PROTOCOL,
-        mapOf(
+        mutableMapOf(
             "header" to mapOf(
                 "MsgSeqNum" to 10947,
                 "SenderCompID" to "SENDER",
@@ -286,5 +307,10 @@ class FixNgCodecTest {
         )
     )
 
+    private val MSG_CORRECT = "8=FIXT1.1\u00019=295\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=145\u0001"
+    private val MSG_WRONG_ENUM = "8=FIXT1.1\u00019=295\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=X\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=185\u0001"
+    private val MSG_WRONG_TYPE = "8=FIXT1.1\u00019=296\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=Five\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=135\u0001"
+    private val MSG_EMPTY_VAL = "8=FIXT1.1\u00019=291\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=205\u0001"
+    private val MSG_NON_PRINTABLE = "8=FIXT1.1\u00019=303\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\taccount\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=125\u0001"
     private val messageBody: MutableMap<String, Any?> = parsedMessage.body as MutableMap
 }

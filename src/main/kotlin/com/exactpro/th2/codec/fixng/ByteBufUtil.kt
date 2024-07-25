@@ -73,10 +73,10 @@ fun ByteBuf.writeTag(tag: Int): ByteBuf {
     return printInt(tag).writeByte(SEP_BYTE.toInt())
 }
 
-fun ByteBuf.readValue(charset: Charset): String {
+fun ByteBuf.readValue(charset: Charset, isDirty: Boolean): String {
     val offset = readerIndex()
     val length = bytesBefore(SOH_BYTE)
-    check(length > 0) { "No valid value at offset: $offset" }
+    check(isDirty || length > 0) { "No valid value at offset: $offset" }
     readerIndex(offset + length + 1)
     return toString(offset, length, charset)
 }
@@ -88,19 +88,20 @@ fun ByteBuf.writeValue(value: String, charset: Charset): ByteBuf = apply {
 
 inline fun ByteBuf.forEachField(
     charset: Charset,
+    isDirty: Boolean,
     action: (tag: Int, value: String) -> Boolean,
 ) {
     while (isReadable) {
         val offset = readerIndex()
-        if (action(readTag(), readValue(charset))) continue
+        if (action(readTag(), readValue(charset, isDirty))) continue
         readerIndex(offset)
         break
     }
 }
 
-inline fun ByteBuf.readField(tag: Int, charset: Charset, message: (Int) -> String): String = readTag().let {
+inline fun ByteBuf.readField(tag: Int, charset: Charset, isDirty: Boolean, message: (Int) -> String): String = readTag().let {
     check(it == tag) { message(it) }
-    readValue(charset)
+    readValue(charset, isDirty)
 }
 
 fun ByteBuf.writeField(tag: Int, value: String, charset: Charset): ByteBuf = writeTag(tag).writeValue(value, charset)
