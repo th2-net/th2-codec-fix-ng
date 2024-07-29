@@ -84,13 +84,26 @@ class FixNgCodecTest {
         val encoded = codec.encode(MessageGroup(listOf(parsedMessage)), reportingContext)
         val body = encoded.messages.first().body as CompositeByteBuf
         val fixMsg = body.toString(StandardCharsets.US_ASCII)
-        assertEquals(
-            "8=FIXT1.1\u00019=305\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u0001461=12345\u000110=097\u0001",
-            fixMsg
-        )
-
+        assertEquals(MSG_ADDITIONAL_FIELD_DICT, fixMsg)
         assertEquals(1, reportingContext.warnings.size)
         assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode WARNING: Unexpected field in message. Field name: CFICode. Field value: 12345.") }
+    }
+
+    @Test
+    fun `decode with addition field that exists in dictionary`() {
+        val rawMessage = RawMessage(
+            metadata = mapOf("encode-mode" to "dirty"),
+            body = Unpooled.wrappedBuffer(MSG_ADDITIONAL_FIELD_DICT.toByteArray(Charsets.US_ASCII))
+        )
+
+        val decodedGroup = codec.decode(MessageGroup(listOf(rawMessage)), reportingContext)
+
+        assertEquals(1, decodedGroup.messages.size)
+        val parsedMessage = decodedGroup.messages[0] as ParsedMessage
+        assertEquals("12345", parsedMessage.body["CFICode"])
+
+        assertEquals(1, reportingContext.warnings.size)
+        assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode decoding WARNING: Unexpected field in message. Field name: CFICode. Field value: 12345.") }
     }
 
     @Test
@@ -102,6 +115,23 @@ class FixNgCodecTest {
         }
 
         assertTrue("Actual message: ${exception.message}") { exception.message?.startsWith("Field does not exist in dictionary. Field name: UNKNOWN_FIELD. Field value: test_value.") ?: false }
+    }
+
+    @Test
+    fun `decode with addition field that does not exists in dictionary`() {
+        val rawMessage = RawMessage(
+            metadata = mapOf("encode-mode" to "dirty"),
+            body = Unpooled.wrappedBuffer(MSG_ADDITIONAL_FIELD_NO_DICT.toByteArray(Charsets.US_ASCII))
+        )
+
+        val decodedGroup = codec.decode(MessageGroup(listOf(rawMessage)), reportingContext)
+
+        assertEquals(1, decodedGroup.messages.size)
+        val parsedMessage = decodedGroup.messages[0] as ParsedMessage
+        assertEquals("54321", parsedMessage.body["9999"])
+
+        assertEquals(1, reportingContext.warnings.size)
+        assertTrue("Actual warning: ${reportingContext.warnings[0]}") { reportingContext.warnings[0].startsWith("Dirty mode decoding WARNING: Field does not exist in dictionary. Field tag: 9999. Field value: 54321.") }
     }
 
     @Test
@@ -127,11 +157,7 @@ class FixNgCodecTest {
         val encoded = codec.encode(MessageGroup(listOf(parsedMessage)), reportingContext)
         val body = encoded.messages.first().body as CompositeByteBuf
         val fixMsg = body.toString(StandardCharsets.US_ASCII)
-        assertEquals(
-            "8=FIXT1.1\u00019=282\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=014\u0001",
-            fixMsg
-        )
-
+        assertEquals(MSG_REQUIRED_FIELD_REMOVED, fixMsg)
         assertEquals(1, reportingContext.warnings.size)
         assertTrue { reportingContext.warnings[0].startsWith("Dirty mode WARNING: Required field missing. Field name: ExecID.") }
     }
@@ -307,10 +333,14 @@ class FixNgCodecTest {
         )
     )
 
+    private val messageBody: MutableMap<String, Any?> = parsedMessage.body as MutableMap
+
     private val MSG_CORRECT = "8=FIXT1.1\u00019=295\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=145\u0001"
+    private val MSG_ADDITIONAL_FIELD_DICT = "8=FIXT1.1\u00019=305\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u0001461=12345\u000110=097\u0001"
+    private val MSG_ADDITIONAL_FIELD_NO_DICT = "8=FIXT1.1\u00019=305\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u00019999=54321\u000110=097\u0001"
+    private val MSG_REQUIRED_FIELD_REMOVED = "8=FIXT1.1\u00019=282\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=014\u0001"
     private val MSG_WRONG_ENUM = "8=FIXT1.1\u00019=295\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=X\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=185\u0001"
     private val MSG_WRONG_TYPE = "8=FIXT1.1\u00019=296\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=Five\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=135\u0001"
     private val MSG_EMPTY_VAL = "8=FIXT1.1\u00019=291\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=205\u0001"
     private val MSG_NON_PRINTABLE = "8=FIXT1.1\u00019=303\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\taccount\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=125\u0001"
-    private val messageBody: MutableMap<String, Any?> = parsedMessage.body as MutableMap
 }

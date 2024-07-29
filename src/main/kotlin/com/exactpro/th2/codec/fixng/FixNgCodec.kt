@@ -46,7 +46,8 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     private val beginString = settings.beginString
     private val charset = settings.charset
 
-    private val fieldsEncode = convertToFields(dictionary.fields, true)
+    private val fieldsEncode = convertToFieldsByName(dictionary.fields, true)
+    private val fieldsDecode = convertToFieldsByTag(dictionary.fields)
     private val messagesByTypeForDecode: Map<String, Message>
     private val messagesByNameForEncode: Map<String, Message>
 
@@ -56,8 +57,8 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     init {
         val messagesForEncode = dictionary.toMessages(isForEncode = true)
         val messagesForDecode = dictionary.toMessages(isForEncode = false)
-        messagesByTypeForDecode = messagesForDecode.associateBy(Message::type)
         messagesByNameForEncode = messagesForEncode.associateBy(Message::name)
+        messagesByTypeForDecode = messagesForDecode.associateBy(Message::type)
 
         val messagesByNameForDecode = messagesForDecode.associateBy(Message::name)
         headerDef = messagesByNameForDecode[HEADER] ?: error("Header is not defined in dictionary")
@@ -126,11 +127,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
             val messageDef = messagesByTypeForDecode[msgType] ?: error("Unknown message type: $msgType")
 
-            val header = headerDef.decode(buffer, isDirty, context)
-            val body = messageDef.decode(buffer, isDirty, context)
-            val trailer = trailerDef.decode(buffer, isDirty, context)
-
-            if (buffer.isReadable) error("Tag appears out of order: ${buffer.readTag()}")
+            val header = headerDef.decode(buffer, messageDef, isDirty, fieldsDecode, context)
+            val body = messageDef.decode(buffer, trailerDef, isDirty, fieldsDecode, context)
+            val trailer = trailerDef.decode(buffer, null, isDirty, fieldsDecode, context)
 
             header["BeginString"] = beginString
             header["BodyLength"] = bodyLength
@@ -197,9 +196,23 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         check(previous == null) { "Duplicate $name field ($tag) with value: $value (previous: $previous)" }
     }
 
-    private fun Message.decode(source: ByteBuf, isDirty: Boolean, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
+    private fun Message.decode(source: ByteBuf, nextPart: Message?, isDirty: Boolean, dictionaryFields: Map<Int, Field>, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
         source.forEachField(charset, isDirty) { tag, value ->
-            val field = get(tag) ?: return@forEachField false
+            val field = get(tag) ?: when {
+                nextPart?.get(tag) != null -> return@forEachField false // we reached next part of the message
+                isDirty -> {
+                    val dictField = dictionaryFields[tag]
+                    if (dictField != null) {
+                        context.warning("Dirty mode decoding WARNING: Unexpected field in message. Field name: ${dictField.name}. Field value: $value.")
+                        dictField
+                    } else {
+                        context.warning("Dirty mode decoding WARNING: Field does not exist in dictionary. Field tag: $tag. Field value: $value.")
+                        Primitive(false, tag.toString(), String::class.java, emptySet(), tag)
+                    }
+                }
+                else -> error("Tag appears out of order: $tag")
+            }
+
             field.decode(source, map, value, tag, isDirty, context)
             return@forEachField true
         }
@@ -489,7 +502,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             tag
         )
 
-        private fun convertToFields(fields: Map<String, IFieldStructure>, isForEncode: Boolean): Map<String, Field> = linkedMapOf<String, Field>().apply {
+        private fun convertToFieldsByName(fields: Map<String, IFieldStructure>, isForEncode: Boolean): Map<String, Field> = linkedMapOf<String, Field>().apply {
             fields.forEach { (name, field) ->
                 when {
                     field !is IMessageStructure -> this[name] = field.toPrimitive()
@@ -497,8 +510,18 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                     field.isComponent -> if (isForEncode) {
                         this[name] = field.toMessage(true)
                     } else {
-                        this += convertToFields(field.fields, false)
+                        this += convertToFieldsByName(field.fields, false)
                     }
+                }
+            }
+        }
+
+        private fun convertToFieldsByTag(fields: Map<String, IFieldStructure>): Map<Int, Field>  = linkedMapOf<Int, Field>().apply {
+            fields.values.forEach { field ->
+                when {
+                    field !is IMessageStructure -> this[field.tag] = field.toPrimitive()
+                    field.isGroup -> this[field.tag] = field.toGroup(false)
+                    field.isComponent -> this += convertToFieldsByTag(field.fields)
                 }
             }
         }
@@ -506,7 +529,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         private fun IMessageStructure.toMessage(isForEncode: Boolean): Message = Message(
             name = name,
             type = StructureUtils.getAttributeValue(this, FIELD_MESSAGE_TYPE) ?: name,
-            fields = convertToFields(this.fields, isForEncode),
+            fields = convertToFieldsByName(this.fields, isForEncode),
             isRequired = isRequired
         )
 
@@ -514,7 +537,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             name = name,
             counter = tag,
             delimiter = fields.values.first().tag,
-            fields = convertToFields(this.fields, isForEncode),
+            fields = convertToFieldsByName(this.fields, isForEncode),
             isRequired = isRequired
         )
 
