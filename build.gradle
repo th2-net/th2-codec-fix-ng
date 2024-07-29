@@ -71,18 +71,18 @@ repositories {
 }
 
 dependencies {
-    implementation "com.exactpro.th2:common:${commonVersion}"
+    implementation "com.exactpro.th2:common:$commonVersion"
     implementation "com.exactpro.th2:codec:5.5.0-dev"
 
-    implementation ("com.exactpro.sf:sailfish-common:${sailfishVersion}") {
+    implementation ("com.exactpro.sf:sailfish-common:$sailfishVersion") {
         exclude group: "commons-configuration", module: "commons-configuration" // because of the vulnerability
         exclude group: "com.fasterxml.jackson.dataformat", module: "jackson-dataformat-yaml" // because of the vulnerability
         exclude group: "com.exactpro.mina", module: "apache-mina-core" // because of the vulnerability
+        exclude group: "javax.activation", module: "javax.activation-api" // because of the license
     }
 
     implementation "io.netty:netty-buffer"
-
-    implementation "org.jetbrains.kotlin:kotlin-reflect:${kotlin_version}"
+    implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
     implementation "io.github.oshai:kotlin-logging:5.1.4"
 
     compileOnly "com.google.auto.service:auto-service:1.1.1"
