@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Exactpro (Exactpro Systems Limited)
+ * Copyright 2023-2024 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,4 +23,5 @@ data class FixNgCodecSettings(
     val beginString: String = "FIXT1.1",
     val dictionary: String,
     val charset: Charset = Charsets.US_ASCII,
+    val dirtyMode: Boolean = false
 ) : IPipelineCodecSettings

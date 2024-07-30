@@ -45,6 +45,7 @@ import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.Message as
 class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings) : IPipelineCodec {
     private val beginString = settings.beginString
     private val charset = settings.charset
+    private val isDirtyMode = settings.dirtyMode
 
     private val fieldsEncode = convertToFieldsByName(dictionary.fields, true)
     private val fieldsDecode = convertToFieldsByTag(dictionary.fields)
@@ -74,7 +75,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 continue
             }
 
-            val isDirty = message.metadata[ENCODE_MODE_PROPERTY_NAME] == DIRTY_ENCODE_MODE
+            val isDirty = isDirtyMode || (message.metadata[ENCODE_MODE_PROPERTY_NAME] == DIRTY_ENCODE_MODE)
             val messageDef = messagesByNameForEncode[message.type] ?: error("Unknown message name: ${message.type}")
 
             val messageFields = message.body
