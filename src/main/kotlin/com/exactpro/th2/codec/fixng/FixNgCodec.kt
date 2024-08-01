@@ -119,7 +119,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 continue
             }
 
-            val isDirty = message.metadata[ENCODE_MODE_PROPERTY_NAME] == DIRTY_ENCODE_MODE
+            val isDirty = isDirtyMode || (message.metadata[ENCODE_MODE_PROPERTY_NAME] == DIRTY_ENCODE_MODE)
             val buffer = message.body
 
             val beginString = buffer.readField(TAG_BEGIN_STRING, charset, isDirty) { "Message starts with $it tag instead of BeginString ($TAG_BEGIN_STRING)" }
