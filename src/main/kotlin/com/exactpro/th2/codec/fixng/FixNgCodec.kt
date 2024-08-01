@@ -91,7 +91,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             body.writeField(TAG_MSG_TYPE, messageDef.type, charset)
 
             headerDef.encode(headerFields, body, isDirty, fieldsEncode, context)
-            messageDef.encode(messageFields, body, isDirty, fieldsEncode, context, setOf(HEADER, TRAILER))
+            messageDef.encode(messageFields, body, isDirty, fieldsEncode, context, FIELDS_NOT_IN_BODY)
             trailerDef.encode(trailerFields, body, isDirty, fieldsEncode, context)
 
             prefix.writeField(TAG_BODY_LENGTH, body.readableBytes(), charset)
@@ -441,9 +441,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     companion object {
         private const val HEADER = "header"
         private const val TRAILER = "trailer"
+        private val FIELDS_NOT_IN_BODY = setOf(HEADER, TRAILER)
         private const val ENCODE_MODE_PROPERTY_NAME = "encode-mode"
         private const val DIRTY_ENCODE_MODE = "dirty"
-
         private const val TAG_BEGIN_STRING = 8
         private const val TAG_BODY_LENGTH = 9
         private const val TAG_CHECKSUM = 10
