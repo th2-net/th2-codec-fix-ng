@@ -27,7 +27,7 @@ import com.google.auto.service.AutoService
 class FixNgCodecFactory : IPipelineCodecFactory {
     private lateinit var context: IPipelineCodecContext
 
-    @Deprecated("Please migrate to the protocols property") override val protocols: Set<String> = setOf(PROTOCOL)
+    @Deprecated("Please migrate to the protocols property") override val protocols: Set<String> = PROTOCOLS
     override val settingsClass: Class<out IPipelineCodecSettings> = FixNgCodecSettings::class.java
 
     override fun init(pipelineCodecContext: IPipelineCodecContext) {
@@ -49,5 +49,6 @@ class FixNgCodecFactory : IPipelineCodecFactory {
 
     companion object {
         const val PROTOCOL = "fix"
+        private val PROTOCOLS = setOf(PROTOCOL)
     }
 }

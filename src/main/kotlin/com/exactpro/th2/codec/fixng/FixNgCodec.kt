@@ -129,8 +129,14 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             val messageDef = messagesByTypeForDecode[msgType] ?: error("Unknown message type: $msgType")
 
             val header = headerDef.decode(buffer, messageDef, isDirty, fieldsDecode, context)
-            val body = messageDef.decode(buffer, trailerDef, isDirty, fieldsDecode, context)
-            val trailer = trailerDef.decode(buffer, null, isDirty, fieldsDecode, context)
+            val body = messageDef.decode(buffer, messageDef, isDirty, fieldsDecode, context)
+            val trailer = trailerDef.decode(buffer, messageDef, isDirty, fieldsDecode, context)
+
+            if (buffer.isReadable) {
+                // this should never happen in dirty mode
+                val errorMessage = if (isDirty) "Field was not processed in dirty mode. Tag: ${buffer.readTag()}" else "Tag appears out of order: ${buffer.readTag()}"
+                error(errorMessage)
+            }
 
             header["BeginString"] = beginString
             header["BodyLength"] = bodyLength
@@ -197,21 +203,26 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         check(previous == null) { "Duplicate $name field ($tag) with value: $value (previous: $previous)" }
     }
 
-    private fun Message.decode(source: ByteBuf, nextPart: Message?, isDirty: Boolean, dictionaryFields: Map<Int, Field>, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
+    private fun Message.decode(source: ByteBuf, bodyDef: Message, isDirty: Boolean, dictionaryFields: Map<Int, Field>, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
         source.forEachField(charset, isDirty) { tag, value ->
-            val field = get(tag) ?: when {
-                nextPart?.get(tag) != null -> return@forEachField false // we reached next part of the message
-                isDirty -> {
-                    val dictField = dictionaryFields[tag]
-                    if (dictField != null) {
-                        context.warning("Dirty mode decoding WARNING: Unexpected field in message. Field name: ${dictField.name}. Field value: $value.")
-                        dictField
-                    } else {
-                        context.warning("Dirty mode decoding WARNING: Field does not exist in dictionary. Field tag: $tag. Field value: $value.")
-                        Primitive(false, tag.toString(), String::class.java, emptySet(), tag)
-                    }
+            val field = get(tag) ?: if (isDirty) {
+                when (this) {
+                    headerDef -> bodyDef[tag] ?: trailerDef[tag]
+                    trailerDef -> null
+                    else -> trailerDef[tag]
+                }?.let { return@forEachField false } // we reached next part of the message
+
+                val dictField = dictionaryFields[tag]
+                if (dictField != null) {
+                    context.warning("Dirty mode decoding WARNING: Unexpected field in message. Field name: ${dictField.name}. Field value: $value.")
+                    dictField
+                } else {
+                    context.warning("Dirty mode decoding WARNING: Field does not exist in dictionary. Field tag: $tag. Field value: $value.")
+                    Primitive(false, tag.toString(), String::class.java, emptySet(), tag)
                 }
-                else -> error("Tag appears out of order: $tag")
+            } else {
+                // we reached next part of the message
+                return@forEachField false
             }
 
             field.decode(source, map, value, tag, isDirty, context)
