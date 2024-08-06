@@ -285,24 +285,24 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
     private fun Group.decode(source: ByteBuf, count: Int, isDirty: Boolean, context: IReportingContext): List<Map<String, Any>> = ArrayList<Map<String, Any>>().also { list ->
         var map: MutableMap<String, Any>? = null
+        val tags: MutableSet<Int> = hashSetOf()
 
         source.forEachField(charset, isDirty) { tag, value ->
             val field = get(tag) ?: return@forEachField false
-            if (tag == delimiter) map = mutableMapOf<String, Any>().also(list::add)
 
-            val group = map ?: run {
-                val errorMessage = "Field ${field.name} ($tag) appears before delimiter ($delimiter)"
-                if (isDirty) {
-                    val newMap = mutableMapOf<String, Any>().also(list::add)
-                    context.warning(DIRTY_MODE_WARNING_PREFIX + errorMessage)
-                    map = newMap
-                    newMap
-                } else {
-                    error(errorMessage)
+            val group = if (tag == delimiter || !tags.add(tag) || map == null) {
+                if (tag != delimiter) {
+                    handleError(isDirty, context, "Field ${field.name} ($tag) appears before delimiter ($delimiter)")
                 }
-            }
 
-            // TODO: handle other cases here
+                tags.clear()
+                mutableMapOf<String, Any>().also {
+                    list.add(it)
+                    map = it
+                }
+            } else {
+                map ?: error("Group entry map can't be null.")
+            }
 
             field.decode(source, group, value, tag, isDirty, context)
             return@forEachField true
