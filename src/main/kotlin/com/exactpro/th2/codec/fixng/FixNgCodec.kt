@@ -123,9 +123,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             val buffer = message.body
 
             val beginString = buffer.readField(TAG_BEGIN_STRING, charset, isDirty) { "Message starts with $it tag instead of BeginString ($TAG_BEGIN_STRING)" }
-            val bodyLength = buffer.readField(TAG_BODY_LENGTH, charset, isDirty) { "BeginString ($TAG_BEGIN_STRING) is followed by $it tag instead of BodyLength ($TAG_BODY_LENGTH)" }
+            val bodyLengthString = buffer.readField(TAG_BODY_LENGTH, charset, isDirty) { "BeginString ($TAG_BEGIN_STRING) is followed by $it tag instead of BodyLength ($TAG_BODY_LENGTH)" }
+            val bodyLength = bodyLengthString.toIntOrNull() ?: handleError(isDirty, context, "Wrong number value in integer field 'BodyLength'. Value: $bodyLengthString.", bodyLengthString)
             val msgType = buffer.readField(TAG_MSG_TYPE, charset, isDirty) { "BodyLength ($TAG_BODY_LENGTH) is followed by $it tag instead of MsgType ($TAG_MSG_TYPE)" }
-
             val messageDef = messagesByTypeForDecode[msgType] ?: error("Unknown message type: $msgType")
 
             val header = headerDef.decode(buffer, messageDef, isDirty, fieldsDecode, context)
@@ -158,8 +158,8 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         return MessageGroup(messages)
     }
 
-    private fun processDecodeError(value: Any, isDirty: Boolean, context: IReportingContext, errorMessageText: String) = if (isDirty) {
-        context.warning("Dirty mode decoding WARNING: $errorMessageText")
+    private fun handleError(isDirty: Boolean, context: IReportingContext, errorMessageText: String, value: Any = Unit) = if (isDirty) {
+        context.warning(DIRTY_MODE_WARNING_PREFIX + errorMessageText)
         value
     } else {
         error(errorMessageText)
@@ -174,8 +174,8 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         context: IReportingContext
     ) {
         val decodedValue: Any = when {
-            value.isEmpty() -> processDecodeError(value, isDirty, context, "Empty value in the field '$name'.")
-            containsNonPrintableChars(value) -> processDecodeError(value, isDirty, context, "Non printable characters in the field '$name'. Value: $value")
+            value.isEmpty() -> handleError(isDirty, context, "Empty value in the field '$name'.", value)
+            containsNonPrintableChars(value) -> handleError(isDirty, context, "Non printable characters in the field '$name'. Value: $value", value)
             else -> when (this) {
                 is Primitive -> decode(value, isDirty, context)
                 is Group -> decode(
@@ -203,6 +203,8 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         check(previous == null) { "Duplicate $name field ($tag) with value: $value (previous: $previous)" }
     }
 
+    private val specialHeaderFields = arrayOf("BeginString", "BodyLength", "MsgType")
+
     private fun Message.decode(source: ByteBuf, bodyDef: Message, isDirty: Boolean, dictionaryFields: Map<Int, Field>, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
         source.forEachField(charset, isDirty) { tag, value ->
             val field = get(tag) ?: if (isDirty) {
@@ -214,10 +216,10 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
                 val dictField = dictionaryFields[tag]
                 if (dictField != null) {
-                    context.warning("Dirty mode decoding WARNING: Unexpected field in message. Field name: ${dictField.name}. Field value: $value.")
+                    context.warning(DIRTY_MODE_WARNING_PREFIX + "Unexpected field in message. Field name: ${dictField.name}. Field value: $value.")
                     dictField
                 } else {
-                    context.warning("Dirty mode decoding WARNING: Field does not exist in dictionary. Field tag: $tag. Field value: $value.")
+                    context.warning(DIRTY_MODE_WARNING_PREFIX + "Field does not exist in dictionary. Field tag: $tag. Field value: $value.")
                     Primitive(false, tag.toString(), String::class.java, emptySet(), tag)
                 }
             } else {
@@ -228,6 +230,12 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             field.decode(source, map, value, tag, isDirty, context)
             return@forEachField true
         }
+
+        for (field in fields.values) {
+            if (field.isRequired && !map.contains(field.name) && field.name !in specialHeaderFields) {
+                handleError(isDirty, context, "Required field missing. Field name: ${field.name}.")
+            }
+        }
     }
 
     private fun Primitive.decode(value: String, isDirty: Boolean, context: IReportingContext): Any {
@@ -236,7 +244,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 java.lang.String::class.java -> value
                 java.lang.Character::class.java -> {
                     if (value.length != 1) {
-                        processDecodeError(value, isDirty, context, "Wrong value in character field '$name'. Value: $value")
+                        handleError(isDirty, context, "Wrong value in character field '$name'. Value: $value", value)
                     } else {
                         value[0]
                     }
@@ -257,7 +265,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 java.lang.Boolean::class.java -> when (value) {
                     "Y" -> true
                     "N" -> false
-                    else -> processDecodeError(value, isDirty, context, "Wrong value in boolean field '$name'. Value: $value.")
+                    else -> handleError(isDirty, context, "Wrong value in boolean field '$name'. Value: $value.", value)
                 }
 
                 else -> error("Unsupported type: $primitiveType.")
@@ -266,12 +274,12 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             if (values.isEmpty() || values.contains(primitiveValue)) {
                 primitiveValue
             } else {
-                processDecodeError(primitiveValue, isDirty, context, "Wrong value in field $name. Actual: $value. Expected $values.")
+                handleError(isDirty, context, "Wrong value in field $name. Actual: $value. Expected $values.", primitiveValue)
             }
         } catch (e: NumberFormatException) {
-            processDecodeError(value, isDirty, context, "Wrong number value in ${primitiveType.name} field '$name'. Value: $value.")
+            handleError(isDirty, context, "Wrong number value in ${primitiveType.name} field '$name'. Value: $value.", value)
         } catch (e: DateTimeParseException) {
-            processDecodeError(value, isDirty, context, "Wrong date/time value in ${primitiveType.name} field '$name'. Value: $value.")
+            handleError(isDirty, context, "Wrong date/time value in ${primitiveType.name} field '$name'. Value: $value.", value)
         }
     }
 
@@ -281,12 +289,29 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         source.forEachField(charset, isDirty) { tag, value ->
             val field = get(tag) ?: return@forEachField false
             if (tag == delimiter) map = mutableMapOf<String, Any>().also(list::add)
-            val group = checkNotNull(map) { "Field ${field.name} ($tag) appears before delimiter ($delimiter)" }
+
+            val group = map ?: run {
+                val errorMessage = "Field ${field.name} ($tag) appears before delimiter ($delimiter)"
+                if (isDirty) {
+                    val newMap = mutableMapOf<String, Any>().also(list::add)
+                    context.warning(DIRTY_MODE_WARNING_PREFIX + errorMessage)
+                    map = newMap
+                    newMap
+                } else {
+                    error(errorMessage)
+                }
+            }
+
+            // TODO: handle other cases here
+
             field.decode(source, group, value, tag, isDirty, context)
             return@forEachField true
         }
 
-        check(list.size == count) { "Unexpected group $name count: ${list.size} (expected: $count)" }
+        if (list.size != count) {
+            val errorText = "Unexpected group $name count: ${list.size} (expected: $count)"
+            handleError(isDirty, context, errorText)
+        }
     }
 
     private fun encodeField(field: Field, value: Any, target: ByteBuf, isDirty: Boolean, dictionaryFields: Map<String, Field>, context: IReportingContext) {
@@ -298,19 +323,11 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 field.tag != TAG_MSG_TYPE
             ) {
                 if (!isCompatibleType(value::class.java, field.primitiveType)) {
-                    if (isDirty) {
-                        context.warning("Dirty mode encoding WARNING: Wrong type value in field ${field.name}. Actual: ${value.javaClass} (value: $value). Expected ${field.primitiveType}")
-                    } else {
-                        error("Wrong type value in field ${field.name}. Actual: ${value.javaClass}. Expected ${field.primitiveType}")
-                    }
+                    handleError(isDirty, context, "Wrong type value in field ${field.name}. Actual: ${value.javaClass} (value: $value). Expected ${field.primitiveType}")
                 }
 
                 if (field.values.isNotEmpty() && !field.values.contains(value)) {
-                    if (isDirty) {
-                        context.warning("Dirty mode encoding WARNING: Wrong value in field ${field.name}. Actual: $value. Expected ${field.values}.")
-                    } else {
-                        error("Wrong value in field ${field.name}. Expected ${field.values}. Actual: $value")
-                    }
+                    handleError(isDirty, context, "Wrong value in field ${field.name}. Actual: $value. Expected ${field.values}.")
                 }
 
                 val stringValue = when (value) {
@@ -322,19 +339,11 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 }
 
                 if (stringValue.isEmpty()) {
-                    if (isDirty) {
-                        context.warning("Dirty mode encoding WARNING: Empty value in the field '${field.name}'.")
-                    } else {
-                        error("Empty value in the field '${field.name}'")
-                    }
+                    handleError(isDirty, context, "Empty value in the field '${field.name}'.")
                 }
 
                 if (containsNonPrintableChars(stringValue)) {
-                    if (isDirty) {
-                        context.warning("Dirty mode encoding WARNING: Non printable characters in the field '${field.name}'. Value: $value")
-                    } else {
-                        error("Non printable characters in the field '${field.name}'. Value: $value")
-                    }
+                    handleError(isDirty, context, "Non-printable characters in the field '${field.name}'. Value: $value")
                 }
 
                 target.writeField(field.tag, stringValue, charset)
@@ -356,11 +365,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             if (value != null) {
                 encodeField(field, value, target, isDirty, dictionaryFields, context)
             } else if (field.isRequired) {
-                if (isDirty) {
-                    context.warning("Dirty mode WARNING: Required field missing. Field name: $name. Message body: $source")
-                } else {
-                    error("Required field missing: $name. Message body: $source")
-                }
+                handleError(isDirty, context, "Required field missing. Field name: $name.")
             }
         }
 
@@ -372,7 +377,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             val field = dictionaryFields[fieldName]
 
             if (field != null) {
-                context.warning("Dirty mode WARNING: Unexpected field in message. Field name: $fieldName. Field value: $value. Message body: $source")
+                context.warning(DIRTY_MODE_WARNING_PREFIX + "Unexpected field in message. Field name: $fieldName. Field value: $value. Message body: $source")
                 encodeField(field, value ?: "", target, true, dictionaryFields, context)
             } else {
                 val tag = fieldName.toIntOrNull()
@@ -380,7 +385,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                     if (value is List<*>) { // TODO: do we need this check?
                         error("List value with unspecified name. tag = $tag")
                     } else {
-                        context.warning("Dirty mode WARNING: Tag instead of field name. Field name: $fieldName. Field value: $value. Message body: $source")
+                        context.warning(DIRTY_MODE_WARNING_PREFIX + "Tag instead of field name. Field name: $fieldName. Field value: $value. Message body: $source")
                         target.writeField(tag, value, charset)
                     }
                 } else {
@@ -459,6 +464,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         private const val TAG_BODY_LENGTH = 9
         private const val TAG_CHECKSUM = 10
         private const val TAG_MSG_TYPE = 35
+        private const val DIRTY_MODE_WARNING_PREFIX = "Dirty mode WARNING: "
 
         private val dateTimeFormatter = DateTimeFormatterBuilder()
             .appendPattern("yyyyMMdd-HH:mm:ss")

@@ -20,7 +20,7 @@ import com.exactpro.th2.codec.api.IPipelineCodecSettings
 import java.nio.charset.Charset
 
 data class FixNgCodecSettings(
-    val beginString: String = "FIXT1.1",
+    val beginString: String = "FIXT.1.1",
     val dictionary: String,
     val charset: Charset = Charsets.US_ASCII,
     val dirtyMode: Boolean = false
