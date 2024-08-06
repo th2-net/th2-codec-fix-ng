@@ -30,7 +30,6 @@ import io.netty.buffer.CompositeByteBuf
 import io.netty.buffer.Unpooled
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import java.math.BigDecimal
 import java.nio.charset.StandardCharsets
@@ -175,20 +174,9 @@ class FixNgCodecTest {
         decodeTest(MSG_NON_PRINTABLE, "Non printable characters in the field 'Account'.")
     }
 
-    // TODO: fix
     @Test
-    @Disabled
-    fun `tag appears out of order`() {
-        decodeTest(MSG_TAG_OUT_OF_ORDER, "Tag appears out of order: 999", )
-/*
-        val tag = 999
-        assertThatThrownBy {
-            codec.decode(MessageGroup(mutableListOf(RawMessage(
-                body = Unpooled.wrappedBuffer("8=FIXT.1.1\u00019=156\u000135=8\u000134=10947\u000149=SENDER\u000156=RECEIVER\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u000156=RECEIVER\u0001$tag=500\u000110=012\u0001".toByteArray())
-            ))), reportingContext)
-        }.message().isEqualTo("Tag appears out of order: $tag")
-*/
-    }
+    fun `tag appears out of order`() =
+        decodeTest(MSG_TAG_OUT_OF_ORDER, "Tag appears out of order: 999", dirtyMode = false)
 
     private fun encodeTest(
         expectedRawMessage: String,
@@ -207,33 +195,43 @@ class FixNgCodecTest {
 
     private fun decodeTest(
         rawMessageString: String,
-        expectedWarning: String? = null,
-        expectedMessage: ParsedMessage = expectedParsedMessage
+        expectedErrorText: String? = null,
+        expectedMessage: ParsedMessage = expectedParsedMessage,
+        dirtyMode: Boolean = true
     ) {
         val expectedBody = expectedMessage.body
         val rawMessage = RawMessage(
             id = parsedMessage.id,
             eventId = parsedMessage.eventId,
-            metadata = mapOf("encode-mode" to "dirty"),
+            metadata = if (dirtyMode) mapOf("encode-mode" to "dirty") else emptyMap(),
             body = Unpooled.wrappedBuffer(rawMessageString.toByteArray(Charsets.US_ASCII))
         )
 
-        val decodedGroup = codec.decode(MessageGroup(listOf(rawMessage)), reportingContext)
-        assertThat(decodedGroup.messages).singleElement()
+        val decodedGroup = try {
+            codec.decode(MessageGroup(listOf(rawMessage)), reportingContext)
+        } catch (e: IllegalStateException) {
+            if (dirtyMode) {
+                throw e
+            } else {
+                assertThat(e.message).startsWith(expectedErrorText)
+                return
+            }
+        }
+
         val parsedMessage = decodedGroup.messages.single() as ParsedMessage
 
         // we don't validate CheckSum and BodyLength for incorrect messages
-        val fieldsToIgnore = if (expectedWarning == null) emptyArray() else arrayOf("trailer.CheckSum", "header.BodyLength")
+        val fieldsToIgnore = if (expectedErrorText == null) emptyArray() else arrayOf("trailer.CheckSum", "header.BodyLength")
 
         assertThat(parsedMessage.body)
             .usingRecursiveComparison()
             .ignoringFields(*fieldsToIgnore)
             .isEqualTo(expectedBody)
 
-        if (expectedWarning == null) {
+        if (expectedErrorText == null) {
             assertThat(reportingContext.warnings).isEmpty()
         } else {
-            assertThat(reportingContext.warnings.single()).startsWith(DIRTY_MODE_WARNING_PREFIX + expectedWarning)
+            assertThat(reportingContext.warnings.single()).startsWith(DIRTY_MODE_WARNING_PREFIX + expectedErrorText)
         }
     }
 
@@ -385,6 +383,6 @@ class FixNgCodecTest {
         private const val MSG_WRONG_TYPE = "8=FIXT.1.1\u00019=296\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=Five\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=181\u0001"
         private const val MSG_EMPTY_VAL = "8=FIXT.1.1\u00019=291\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=251\u0001"
         private const val MSG_NON_PRINTABLE = "8=FIXT.1.1\u00019=303\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\taccount\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=171\u0001"
-        private const val MSG_TAG_OUT_OF_ORDER = "8=FIXT.1.1\u00019=295\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u0001999=500\u000110=000\u0001"
+        private const val MSG_TAG_OUT_OF_ORDER = "8=FIXT.1.1\u00019=295\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=000\u0001999=500\u0001"
     }
 }
