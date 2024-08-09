@@ -203,7 +203,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         check(previous == null) { "Duplicate $name field ($tag) with value: $value (previous: $previous)" }
     }
 
-    private val specialHeaderFields = arrayOf("BeginString", "BodyLength", "MsgType")
+    private val prereadHeaderFields = arrayOf("BeginString", "BodyLength", "MsgType")
 
     private fun Message.decode(source: ByteBuf, bodyDef: Message, isDirty: Boolean, dictionaryFields: Map<Int, Field>, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
         source.forEachField(charset, isDirty) { tag, value ->
@@ -232,7 +232,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         }
 
         for (field in fields.values) {
-            if (field.isRequired && !map.contains(field.name) && field.name !in specialHeaderFields) {
+            if (field.isRequired && !map.contains(field.name) && field.name !in prereadHeaderFields) {
                 handleError(isDirty, context, "Required field missing. Field name: ${field.name}.")
             }
         }
@@ -354,11 +354,11 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
     private fun FieldMap.encode(source: Map<String, *>, target: ByteBuf, isDirty: Boolean, dictionaryFields: Map<String, Field>, context: IReportingContext, fieldsToSkip: Set<String> = emptySet()) {
         fields.forEach { (name, field) ->
-            if (field is Primitive && isCalculatedField(field.tag)) return@forEach
+            if (field is Primitive && field.tag in calculatedFields) return@forEach
             val value = source[name]
             if (value != null) {
                 encodeField(field, value, target, isDirty, dictionaryFields, context)
-            } else if (field.isRequired) {
+            } else if (field.isRequired && this !== headerDef) {
                 handleError(isDirty, context, "Required field missing. Field name: $name.")
             }
         }
@@ -459,7 +459,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         private const val DIRTY_MODE_WARNING_PREFIX = "Dirty mode WARNING: "
 
         private fun containsNonPrintableChars(stringValue: String) = stringValue.any { it !in ' ' .. '~' }
-        private fun isCalculatedField(tag: Int) = tag == TAG_BEGIN_STRING || tag == TAG_BODY_LENGTH || tag == TAG_CHECKSUM || tag == TAG_MSG_TYPE
+        private val calculatedFields = intArrayOf(TAG_BEGIN_STRING, TAG_BODY_LENGTH, TAG_MSG_TYPE, TAG_CHECKSUM)
 
         private val dateTimeFormatter = DateTimeFormatterBuilder()
             .appendPattern("yyyyMMdd-HH:mm:ss")
