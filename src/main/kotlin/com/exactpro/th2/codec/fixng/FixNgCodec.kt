@@ -239,8 +239,12 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     }
 
     private fun Primitive.decode(value: String, isDirty: Boolean, context: IReportingContext): Any {
+        if (values.isNotEmpty() && !values.contains(value)) {
+            handleError(isDirty, context, "Invalid value in enum field $name. Actual: $value. Valid values $values.")
+        }
+
         return try {
-            val primitiveValue = when (primitiveType) {
+            when (primitiveType) {
                 java.lang.String::class.java -> value
                 java.lang.Character::class.java -> {
                     if (value.length != 1) {
@@ -269,12 +273,6 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 }
 
                 else -> error("Unsupported type: $primitiveType.")
-            }
-
-            if (values.isEmpty() || values.contains(primitiveValue)) {
-                primitiveValue
-            } else {
-                handleError(isDirty, context, "Wrong value in field $name. Actual: $value. Expected $values.", primitiveValue)
             }
         } catch (e: NumberFormatException) {
             handleError(isDirty, context, "Wrong number value in ${primitiveType.name} field '$name'. Value: $value.", value)
@@ -316,18 +314,15 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
     private fun encodeField(field: Field, value: Any, target: ByteBuf, isDirty: Boolean, dictionaryFields: Map<String, Field>, context: IReportingContext) {
         when {
-            field is Primitive -> if (
-                field.tag != TAG_BEGIN_STRING &&
-                field.tag != TAG_BODY_LENGTH &&
-                field.tag != TAG_CHECKSUM &&
-                field.tag != TAG_MSG_TYPE
-            ) {
-                if (!isCompatibleType(value::class.java, field.primitiveType)) {
-                    handleError(isDirty, context, "Wrong type value in field ${field.name}. Actual: ${value.javaClass} (value: $value). Expected ${field.primitiveType}")
-                }
-
-                if (field.values.isNotEmpty() && !field.values.contains(value)) {
-                    handleError(isDirty, context, "Wrong value in field ${field.name}. Actual: $value. Expected ${field.values}.")
+            field is Primitive -> {
+                if (!isCompatibleType(value.javaClass, field.primitiveType)) {
+                    if (value is String) {
+                        field.decode(value, isDirty, context) // validate if String value could be parsed to required type
+                        target.writeField(field.tag, value, charset)
+                        return
+                    } else {
+                        handleError(isDirty, context, "Wrong type value in field ${field.name}. Actual: ${value.javaClass} (value: $value). Expected ${field.primitiveType}")
+                    }
                 }
 
                 val stringValue = when (value) {
@@ -338,12 +333,10 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                     else -> value.toString()
                 }
 
-                if (stringValue.isEmpty()) {
-                    handleError(isDirty, context, "Empty value in the field '${field.name}'.")
-                }
-
-                if (containsNonPrintableChars(stringValue)) {
-                    handleError(isDirty, context, "Non-printable characters in the field '${field.name}'. Value: $value")
+                when {
+                    stringValue.isEmpty() -> handleError(isDirty, context, "Empty value in the field '${field.name}'.")
+                    containsNonPrintableChars(stringValue) -> handleError(isDirty, context, "Non-printable characters in the field '${field.name}'. Value: $value")
+                    field.values.isNotEmpty() && !field.values.contains(stringValue) -> handleError(isDirty, context, "Invalid value in enum field ${field.name}. Actual: $value. Valid values ${field.values}.")
                 }
 
                 target.writeField(field.tag, stringValue, charset)
@@ -361,6 +354,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
     private fun FieldMap.encode(source: Map<String, *>, target: ByteBuf, isDirty: Boolean, dictionaryFields: Map<String, Field>, context: IReportingContext, fieldsToSkip: Set<String> = emptySet()) {
         fields.forEach { (name, field) ->
+            if (field is Primitive && isCalculatedField(field.tag)) return@forEach
             val value = source[name]
             if (value != null) {
                 encodeField(field, value, target, isDirty, dictionaryFields, context)
@@ -406,8 +400,6 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         }
     }
 
-    private fun containsNonPrintableChars(stringValue: String) = stringValue.any { it !in ' ' .. '~' }
-
     interface Field {
         val isRequired: Boolean
         val name: String
@@ -417,7 +409,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         override val isRequired: Boolean,
         override val name: String,
         val primitiveType: Class<*>,
-        val values: Set<Any>,
+        val values: Set<String>,
         val tag: Int
     ) : Field
 
@@ -465,6 +457,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         private const val TAG_CHECKSUM = 10
         private const val TAG_MSG_TYPE = 35
         private const val DIRTY_MODE_WARNING_PREFIX = "Dirty mode WARNING: "
+
+        private fun containsNonPrintableChars(stringValue: String) = stringValue.any { it !in ' ' .. '~' }
+        private fun isCalculatedField(tag: Int) = tag == TAG_BEGIN_STRING || tag == TAG_BODY_LENGTH || tag == TAG_CHECKSUM || tag == TAG_MSG_TYPE
 
         private val dateTimeFormatter = DateTimeFormatterBuilder()
             .appendPattern("yyyyMMdd-HH:mm:ss")
@@ -516,7 +511,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             isRequired,
             name,
             javaTypeToClass.getValue(javaType),
-            values.values.map<IAttributeStructure, Any> { it.getCastValue() }.toSet(),
+            values.values.map<IAttributeStructure, String> { it.getCastValue<Any>().toString() }.toSet(),
             tag
         )
 

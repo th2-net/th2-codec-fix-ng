@@ -142,20 +142,32 @@ class FixNgCodecTest {
 
     @Test
     fun `encode with wrong enum value`() {
-        parsedBody["ExecType"]='X'
-        encodeTest(MSG_WRONG_ENUM, "Wrong value in field ExecType. Actual: X.")
+        parsedBody["ExecType"] = 'X'
+        encodeTest(MSG_WRONG_ENUM, "Invalid value in enum field ExecType. Actual: X.")
     }
 
     @Test
     fun `decode with wrong enum value`() {
         expectedParsedBody["ExecType"] = 'X'
-        decodeTest(MSG_WRONG_ENUM, "Wrong value in field ExecType. Actual: X.")
+        decodeTest(MSG_WRONG_ENUM, "Invalid value in enum field ExecType. Actual: X.")
+    }
+
+    @Test
+    fun `encode with correct enum value as string`() {
+        parsedBody["ExecType"] = "0"
+        encodeTest(MSG_CORRECT)
     }
 
     @Test
     fun `encode with wrong value type`() {
         parsedBody["LeavesQty"] = "Five" // String instead of BigDecimal
-        encodeTest(MSG_WRONG_TYPE, "Wrong type value in field LeavesQty. Actual: class java.lang.String (value: Five). Expected class java.math.BigDecimal")
+        encodeTest(MSG_WRONG_TYPE, "Wrong number value in java.math.BigDecimal field 'LeavesQty'. Value: Five.")
+    }
+
+    @Test
+    fun `encode with correct BigDecimal value in string`() {
+        parsedBody["LeavesQty"] = "500" // String instead of BigDecimal
+        encodeTest(MSG_CORRECT)
     }
 
     @Test
@@ -186,6 +198,18 @@ class FixNgCodecTest {
     fun `decode with non printable characters`() {
         expectedParsedBody["Account"] = "test\taccount"
         decodeTest(MSG_NON_PRINTABLE, "Non printable characters in the field 'Account'.")
+    }
+
+    @Test
+    fun `encode with calculated required fields removed`() {
+        @Suppress("UNCHECKED_CAST")
+        val header = parsedBody["header"] as MutableMap<String, Any>
+        header.remove("BeginString")
+        header.remove("BodyLength")
+        header.remove("MsgType")
+        @Suppress("UNCHECKED_CAST")
+        (parsedBody["trailer"] as MutableMap<String, Any>).remove("CheckSum")
+        encodeTest(MSG_CORRECT)
     }
 
     @Test
@@ -256,7 +280,7 @@ class FixNgCodecTest {
         mutableMapOf("encode-mode" to "dirty"),
         PROTOCOL,
         mutableMapOf(
-            "header" to mapOf(
+            "header" to mutableMapOf(
                 "MsgSeqNum" to 10947,
                 "SenderCompID" to "SENDER",
                 "SendingTime" to LocalDateTime.parse("2023-04-19T10:36:07.415088"),
@@ -275,14 +299,14 @@ class FixNgCodecTest {
             "CumQty" to BigDecimal(500),
             "SecurityID" to "NWDR",
             "SecurityIDSource" to "8",
-            "TradingParty" to mapOf(
-                "NoPartyIDs" to listOf(
-                    mapOf(
+            "TradingParty" to mutableMapOf(
+                "NoPartyIDs" to mutableListOf(
+                    mutableMapOf(
                         "PartyID" to "NGALL1FX01",
                         "PartyIDSource" to 'D',
                         "PartyRole" to 76
                     ),
-                    mapOf(
+                    mutableMapOf(
                         "PartyID" to "0",
                         "PartyIDSource" to 'P',
                         "PartyRole" to 3
@@ -298,7 +322,7 @@ class FixNgCodecTest {
             "Price" to 1000,
             "Unknown" to "500",
             "TransactTime" to LocalDateTime.parse("2018-02-05T10:38:08.000008"),
-            "trailer" to mapOf(
+            "trailer" to mutableMapOf(
                 "CheckSum" to "191"
             )
         )

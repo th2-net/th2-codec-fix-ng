@@ -26,8 +26,9 @@ import com.google.auto.service.AutoService
 @AutoService(IPipelineCodecFactory::class)
 class FixNgCodecFactory : IPipelineCodecFactory {
     private lateinit var context: IPipelineCodecContext
+    override val protocols: Set<String>
+        get() = PROTOCOLS
 
-    override val protocols: Set<String> = PROTOCOLS
     override val settingsClass: Class<out IPipelineCodecSettings> = FixNgCodecSettings::class.java
 
     override fun init(pipelineCodecContext: IPipelineCodecContext) {
