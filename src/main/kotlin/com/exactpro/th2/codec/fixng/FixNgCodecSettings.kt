@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Exactpro (Exactpro Systems Limited)
+ * Copyright 2023-2024 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,8 @@ import com.exactpro.th2.codec.api.IPipelineCodecSettings
 import java.nio.charset.Charset
 
 data class FixNgCodecSettings(
-    val beginString: String = "FIXT1.1",
+    val beginString: String = "FIXT.1.1",
     val dictionary: String,
     val charset: Charset = Charsets.US_ASCII,
+    val dirtyMode: Boolean = false
 ) : IPipelineCodecSettings

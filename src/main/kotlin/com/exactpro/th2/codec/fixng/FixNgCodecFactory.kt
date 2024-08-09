@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Exactpro (Exactpro Systems Limited)
+ * Copyright 2023-2024 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,14 @@ import com.exactpro.th2.codec.api.IPipelineCodec
 import com.exactpro.th2.codec.api.IPipelineCodecContext
 import com.exactpro.th2.codec.api.IPipelineCodecFactory
 import com.exactpro.th2.codec.api.IPipelineCodecSettings
-import com.exactpro.th2.codec.fixng.FixNgCodec.Companion.toMessages
 import com.google.auto.service.AutoService
 
 @AutoService(IPipelineCodecFactory::class)
 class FixNgCodecFactory : IPipelineCodecFactory {
     private lateinit var context: IPipelineCodecContext
+    override val protocols: Set<String>
+        get() = PROTOCOLS
 
-    @Deprecated("Please migrate to the protocols property") override val protocol: String = PROTOCOL
     override val settingsClass: Class<out IPipelineCodecSettings> = FixNgCodecSettings::class.java
 
     override fun init(pipelineCodecContext: IPipelineCodecContext) {
@@ -41,7 +41,7 @@ class FixNgCodecFactory : IPipelineCodecFactory {
             "settings is not an instance of ${FixNgCodecSettings::class.java}: ${settings?.let { it::class.java }}"
         }
         return FixNgCodec(
-            context[codecSettings.dictionary].use(XmlDictionaryStructureLoader()::load).toMessages(),
+            context[codecSettings.dictionary].use(XmlDictionaryStructureLoader()::load),
             requireNotNull(codecSettings as? FixNgCodecSettings) {
                 "settings is not an instance of ${FixNgCodecSettings::class.java}: $codecSettings"
             }
@@ -50,5 +50,6 @@ class FixNgCodecFactory : IPipelineCodecFactory {
 
     companion object {
         const val PROTOCOL = "fix"
+        private val PROTOCOLS = setOf(PROTOCOL)
     }
 }
