@@ -34,14 +34,19 @@ import org.junit.jupiter.api.Test
 import java.math.BigDecimal
 import java.nio.charset.StandardCharsets
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
+import java.time.temporal.ChronoField
 
 class FixNgCodecTest {
     private val dictionary: IDictionaryStructure = FixNgCodecTest::class.java.classLoader
         .getResourceAsStream("dictionary.xml")
         .use(XmlDictionaryStructureLoader()::load)
 
-    private val codec = FixNgCodec(dictionary, FixNgCodecSettings(dictionary = ""))
+    private val codec = FixNgCodec(dictionary, FixNgCodecSettings(dictionary = "", useStringValueFormat = false))
 
     private val reportingContext = object : IReportingContext {
         private val _warnings: MutableList<String> = ArrayList()
@@ -63,6 +68,9 @@ class FixNgCodecTest {
 
     @Test
     fun `simple decode`() = decodeTest(MSG_CORRECT)
+
+    @Test
+    fun `simple decode to string values`() = decodeTest(MSG_CORRECT, stringValues = true)
 
     @Test
     fun `simple decode with no body`() = decodeTest(MSG_CORRECT_WITHOUT_BODY, expectedMessage = expectedMessageWithoutBody)
@@ -246,7 +254,8 @@ class FixNgCodecTest {
         rawMessageString: String,
         expectedErrorText: String? = null,
         expectedMessage: ParsedMessage = expectedParsedMessage,
-        dirtyMode: Boolean = true
+        dirtyMode: Boolean = true,
+        stringValues: Boolean = false
     ) {
         val expectedBody = expectedMessage.body
         val rawMessage = RawMessage(
@@ -257,6 +266,7 @@ class FixNgCodecTest {
         )
 
         val decodedGroup = try {
+            val codec = if (stringValues) FixNgCodec(dictionary, FixNgCodecSettings(dictionary = "")) else this.codec
             codec.decode(MessageGroup(listOf(rawMessage)), reportingContext)
         } catch (e: IllegalStateException) {
             if (dirtyMode) {
@@ -269,19 +279,30 @@ class FixNgCodecTest {
 
         val parsedMessage = decodedGroup.messages.single() as ParsedMessage
 
-        // we don't validate CheckSum and BodyLength for incorrect messages
+        // we don't validate `CheckSum` and `BodyLength` in incorrect messages
         val fieldsToIgnore = if (expectedErrorText == null) emptyArray() else arrayOf("trailer.CheckSum", "header.BodyLength")
+        val expected = if (stringValues) convertValuesToString(expectedBody) else expectedBody
 
         assertThat(parsedMessage.body)
             .usingRecursiveComparison()
             .ignoringFields(*fieldsToIgnore)
-            .isEqualTo(expectedBody)
+            .isEqualTo(expected)
 
         if (expectedErrorText == null) {
             assertThat(reportingContext.warnings).isEmpty()
         } else {
             assertThat(reportingContext.warnings.single()).startsWith(DIRTY_MODE_WARNING_PREFIX + expectedErrorText)
         }
+    }
+
+    private fun convertValuesToString(value: Any?): Any = when (value) {
+        is Map<*, *> -> value.mapValues { convertValuesToString(it.value) }
+        is List<*> -> value.map(::convertValuesToString)
+        is java.lang.Boolean -> if (value.booleanValue()) "Y" else "N"
+        is LocalDateTime -> value.format(dateTimeFormatter)
+        is LocalDate -> value.format(dateFormatter)
+        is LocalTime -> value.format(timeFormatter)
+        else -> value.toString()
     }
 
     private val parsedMessage = ParsedMessage(
@@ -435,5 +456,17 @@ class FixNgCodecTest {
         private const val MSG_NON_PRINTABLE = "8=FIXT.1.1\u00019=303\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\taccount\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=171\u0001"
         private const val MSG_REQUIRED_HEADER_REMOVED = "8=FIXT.1.1\u00019=236\u000135=8\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=050\u0001"
         private const val MSG_TAG_OUT_OF_ORDER = "8=FIXT.1.1\u00019=295\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=000\u0001999=500\u0001"
+
+        private val dateTimeFormatter = DateTimeFormatterBuilder()
+            .appendPattern("yyyyMMdd-HH:mm:ss")
+            .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
+            .toFormatter()
+
+        private val dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
+
+        private val timeFormatter = DateTimeFormatterBuilder()
+            .appendPattern("HH:mm:ss")
+            .appendFraction(ChronoField.MILLI_OF_SECOND, 0, 9, true)
+            .toFormatter()
     }
 }
