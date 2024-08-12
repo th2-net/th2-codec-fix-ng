@@ -546,10 +546,14 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             isRequired = isRequired
         )
 
+        private fun getFirstTag(message: IMessageStructure): Int = message.fields.values.first().let {
+            if (it is IMessageStructure) getFirstTag(it) else it.tag
+        }
+
         private fun IMessageStructure.toGroup(isForEncode: Boolean): Group = Group(
             name = name,
             counter = tag,
-            delimiter = fields.values.first().tag,
+            delimiter = getFirstTag(this),
             fields = convertToFieldsByName(this.fields, isForEncode),
             isRequired = isRequired
         )
