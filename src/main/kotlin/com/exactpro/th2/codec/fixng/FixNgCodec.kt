@@ -46,7 +46,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     private val beginString = settings.beginString
     private val charset = settings.charset
     private val isDirtyMode = settings.dirtyMode
-    private val isDecodeToStrings = settings.useStringValueFormat
+    private val isDecodeToStrings = settings.decodeValuesToStrings
 
     private val fieldsEncode = convertToFieldsByName(dictionary.fields, true)
     private val fieldsDecode = convertToFieldsByTag(dictionary.fields)

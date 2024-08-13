@@ -24,5 +24,5 @@ data class FixNgCodecSettings(
     val dictionary: String,
     val charset: Charset = Charsets.US_ASCII,
     val dirtyMode: Boolean = false,
-    val useStringValueFormat: Boolean = true
+    val decodeValuesToStrings: Boolean = true,
 ) : IPipelineCodecSettings

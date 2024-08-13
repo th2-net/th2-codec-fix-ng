@@ -46,7 +46,7 @@ class FixNgCodecTest {
         .getResourceAsStream("dictionary.xml")
         .use(XmlDictionaryStructureLoader()::load)
 
-    private val codec = FixNgCodec(dictionary, FixNgCodecSettings(dictionary = "", useStringValueFormat = false))
+    private val codec = FixNgCodec(dictionary, FixNgCodecSettings(dictionary = "", decodeValuesToStrings = false))
 
     private val reportingContext = object : IReportingContext {
         private val _warnings: MutableList<String> = ArrayList()
