@@ -3,11 +3,13 @@ plugins {
     id "com.exactpro.th2.gradle.component" version "0.1.1"
     id "org.jetbrains.kotlin.jvm" version "$kotlin_version"
     id "org.jetbrains.kotlin.kapt" version "$kotlin_version"
+    id "me.champeau.jmh" version "0.7.2"
 }
 
 ext {
     sailfishVersion = '3.3.241'
     commonVersion = '5.14.0-dev'
+    jmhVersion = '1.37'
 }
 
 group = 'com.exactpro.th2'
@@ -88,6 +90,10 @@ dependencies {
     compileOnly "com.google.auto.service:auto-service:1.1.1"
     annotationProcessor "com.google.auto.service:auto-service:1.1.1"
     kapt "com.google.auto.service:auto-service:1.1.1"
+
+    jmh "org.openjdk.jmh:jmh-core:$jmhVersion"
+    jmh "org.openjdk.jmh:jmh-generator-annprocess:$jmhVersion"
+    jmh "org.openjdk.jmh:jmh-generator-bytecode:$jmhVersion"
 
     testImplementation "org.junit.jupiter:junit-jupiter"
     testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
