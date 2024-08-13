@@ -46,6 +46,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     private val beginString = settings.beginString
     private val charset = settings.charset
     private val isDirtyMode = settings.dirtyMode
+    private val isDecodeToStrings = settings.decodeValuesToStrings
 
     private val fieldsEncode = convertToFieldsByName(dictionary.fields, true)
     private val fieldsDecode = convertToFieldsByTag(dictionary.fields)
@@ -139,7 +140,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             }
 
             header["BeginString"] = beginString
-            header["BodyLength"] = bodyLength
+            header["BodyLength"] = if (isDecodeToStrings) bodyLengthString else bodyLength
             header["MsgType"] = msgType
 
             body[HEADER] = header
@@ -243,7 +244,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             handleError(isDirty, context, "Invalid value in enum field $name. Actual: $value. Valid values $values.")
         }
 
-        return try {
+        val decodedValue = try {
             when (primitiveType) {
                 java.lang.String::class.java -> value
                 java.lang.Character::class.java -> {
@@ -279,6 +280,8 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         } catch (e: DateTimeParseException) {
             handleError(isDirty, context, "Wrong date/time value in ${primitiveType.name} field '$name'. Value: $value.", value)
         }
+
+        return if (isDecodeToStrings) value else decodedValue
     }
 
     private fun Group.decode(source: ByteBuf, count: Int, isDirty: Boolean, context: IReportingContext): List<Map<String, Any>> = ArrayList<Map<String, Any>>().also { list ->
