@@ -17,12 +17,10 @@
 package com.exactpro.th2.codec.fixng
 
 import com.exactpro.sf.common.codecs.AbstractCodec
-import com.exactpro.sf.common.impl.messages.xml.configuration.Dictionary
 import com.exactpro.sf.common.messages.IMessageFactory
 import com.exactpro.sf.common.messages.structures.IDictionaryStructure
 import com.exactpro.sf.common.messages.structures.loaders.XmlDictionaryStructureLoader
 import com.exactpro.sf.common.util.ICommonSettings
-import com.exactpro.sf.configuration.dictionary.FullFIXDictionaryValidatorFactory
 import com.exactpro.sf.configuration.dictionary.interfaces.IDictionaryValidator
 import com.exactpro.sf.configuration.factory.FixMessageFactory
 
@@ -33,13 +31,11 @@ import com.exactpro.sf.externalapi.codec.IExternalCodecSettings
 import com.exactpro.sf.externalapi.codec.PluginAlias
 import com.exactpro.sf.externalapi.codec.ResourcePath
 import com.exactpro.sf.externalapi.codec.impl.AbstractExternalMinaCodecFactory
-import com.exactpro.sf.externalapi.codec.impl.ExternalFixCodecFactory
 import com.exactpro.sf.services.MessageHelper
 import com.exactpro.sf.services.fix.FIXCodec
 import com.exactpro.sf.services.fix.FixMessageHelper
 import com.exactpro.sf.services.tcpip.EvolutionTCPIPSettings
 import com.exactpro.sf.services.tcpip.TCPIPSettings
-import com.exactpro.sf.util.DictionaryValidator
 
 import com.exactpro.th2.codec.api.IReportingContext
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.RawMessage
@@ -63,14 +59,11 @@ import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter
 import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter
 import com.exactpro.th2.sailfish.utils.transport.IMessageToTransportConverter
 import com.exactpro.th2.sailfish.utils.transport.TransportToIMessageConverter
-import com.google.common.collect.ArrayTable
 import com.google.common.collect.HashBasedTable
 import com.google.common.collect.Table
 import io.netty.buffer.AbstractReferenceCountedByteBuf
 
-import io.netty.buffer.CompositeByteBuf
 import io.netty.buffer.Unpooled
-import org.apache.commons.configuration.HierarchicalConfiguration
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
@@ -81,7 +74,7 @@ import java.time.Instant
 import java.time.LocalDateTime
 
 class FixNgCodecTest {
-    private val fixDictionary: IDictionaryStructure = FixNgCodecTest::class.java.classLoader
+    private val dictionary: IDictionaryStructure = FixNgCodecTest::class.java.classLoader
         .getResourceAsStream("dictionary.xml")
         .use(XmlDictionaryStructureLoader()::load)
 
@@ -114,7 +107,7 @@ class FixNgCodecTest {
             get() = mutableMapOf(FolderType.TEST_LIBRARY to File("."))
 
         override fun get(dictionaryType: DictionaryType): IDictionaryStructure? =
-            if (dictionaryType == DictionaryType.MAIN) fixDictionary else null
+            if (dictionaryType == DictionaryType.MAIN) this@FixNgCodecTest.dictionary else null
 
         override fun <T> get(propertyName: String): T {
             TODO("Not yet implemented")
@@ -134,7 +127,7 @@ class FixNgCodecTest {
     private val messageToProtoConverter = IMessageToProtoConverter()
     private val protoToMessageConverter = ProtoToIMessageConverter()
     private val messageToTransportConverter = IMessageToTransportConverter()
-    private val transportToMessageConverter = TransportToIMessageConverter(dictionary = fixDictionary)
+    private val transportToMessageConverter = TransportToIMessageConverter(dictionary = dictionary)
     private val protoEncodeProcessor = ProtoEncodeProcessor(fixCodecFactory, fixCodecSettings, protoToMessageConverter)
     private val protoDecodeProcessor = ProtoDecodeProcessor(fixCodecFactory, fixCodecSettings, messageToProtoConverter)
     private val transportEncodeProcessor = TransportEncodeProcessor(fixCodecFactory, fixCodecSettings, transportToMessageConverter)
