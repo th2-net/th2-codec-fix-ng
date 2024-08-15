@@ -113,7 +113,14 @@ class FixNgCodecTest {
             TODO("Not yet implemented")
         }
 
-        override fun <T : Any> getSettings(): T = TCPIPSettings() as T
+        override fun <T : Any> getSettings(): T = TCPIPSettings().apply {
+            // default config from https://github.com/th2-net/th2-codec-generic/blob/version-4/codec-fix/src/main/resources/codec_config.yml
+            isVerifyMessageStructure = true
+            isDecodeByDictionary = true
+            isDepersonalizationIncomingMessages = false
+            isIncludeMicroseconds = true
+            fieldConverterClassName = "com.exactpro.sf.services.fix.FixFieldConverter"
+        } as T
 
         override fun set(dictionaryType: DictionaryType, dictionary: IDictionaryStructure) {
             TODO("Not yet implemented")
