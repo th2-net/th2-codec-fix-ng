@@ -550,7 +550,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         )
 
         private fun getFirstTag(message: IMessageStructure): Int = message.fields.values.first().let {
-            if (it is IMessageStructure) getFirstTag(it) else it.tag
+            if (it is IMessageStructure && it.isComponent) getFirstTag(it) else it.tag
         }
 
         private fun IMessageStructure.toGroup(isForEncode: Boolean): Group = Group(
