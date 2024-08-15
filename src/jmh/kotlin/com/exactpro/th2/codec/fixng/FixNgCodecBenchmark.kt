@@ -18,39 +18,58 @@ package com.exactpro.th2.codec.fixng
 
 import com.exactpro.sf.common.messages.structures.IDictionaryStructure
 import com.exactpro.sf.common.messages.structures.loaders.XmlDictionaryStructureLoader
+import com.exactpro.th2.codec.api.IPipelineCodec
 import com.exactpro.th2.codec.api.IReportingContext
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.MessageGroup
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.RawMessage
+import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
 import org.openjdk.jmh.annotations.Benchmark
 import org.openjdk.jmh.annotations.BenchmarkMode
+import org.openjdk.jmh.annotations.Level
 import org.openjdk.jmh.annotations.Mode
 import org.openjdk.jmh.annotations.Scope
+import org.openjdk.jmh.annotations.Setup
 import org.openjdk.jmh.annotations.State
 
 @State(Scope.Benchmark)
+open class BenchmarkState {
+    lateinit var codec: IPipelineCodec
+    lateinit var rawBody: ByteBuf
+    lateinit var rawGroup: MessageGroup
+    lateinit var parsedGroup: MessageGroup
+
+    @Setup(Level.Trial)
+    fun setup() {
+        val dictionary: IDictionaryStructure = FixNgCodecTest::class.java.classLoader
+            .getResourceAsStream("dictionary.xml")
+            .use(XmlDictionaryStructureLoader()::load)
+
+        val parsedMessage = FixNgCodecTest.createParsedMessage()
+
+        codec = FixNgCodec(dictionary, FixNgCodecSettings(dictionary = "", decodeValuesToStrings = false))
+        rawBody = Unpooled.wrappedBuffer(FixNgCodecTest.MSG_CORRECT.toByteArray(Charsets.US_ASCII))
+        rawGroup = MessageGroup(listOf(RawMessage(id = parsedMessage.id, eventId = parsedMessage.eventId, body = rawBody)))
+        parsedGroup = MessageGroup(listOf(parsedMessage))
+    }
+
+    @Setup(Level.Invocation)
+    fun resetReader() {
+        rawBody.resetReaderIndex()
+    }
+}
+
 open class FixNgCodecBenchmark {
-    private val dictionary: IDictionaryStructure = FixNgCodecTest::class.java.classLoader
-        .getResourceAsStream("dictionary.xml")
-        .use(XmlDictionaryStructureLoader()::load)
-
-    private val parsedMessage = FixNgCodecTest.createParsedMessage()
-    private val codec = FixNgCodec(dictionary, FixNgCodecSettings(dictionary = "", decodeValuesToStrings = false))
-    private val rawBody = Unpooled.wrappedBuffer(FixNgCodecTest.MSG_CORRECT.toByteArray(Charsets.US_ASCII))
-    private val rawGroup = MessageGroup(listOf(RawMessage(id = parsedMessage.id, eventId = parsedMessage.eventId, body = rawBody)))
-    private val parsedGroup = MessageGroup(listOf(parsedMessage))
-
     @Benchmark
     @BenchmarkMode(Mode.Throughput)
-    fun encodeFixMessage() {
-        codec.encode(parsedGroup, context)
+    fun encodeFixMessage(state: BenchmarkState) {
+        state.codec.encode(state.parsedGroup, context)
     }
 
     @Benchmark
     @BenchmarkMode(Mode.Throughput)
-    fun parseFixMessage() {
-        rawBody.resetReaderIndex()
-        codec.decode(rawGroup, context)
+    fun parseFixMessage(state: BenchmarkState) {
+        state.codec.decode(state.rawGroup, context)
     }
 
     companion object {
