@@ -34,12 +34,7 @@ import org.junit.jupiter.api.Test
 import java.math.BigDecimal
 import java.nio.charset.StandardCharsets
 import java.time.Instant
-import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeFormatterBuilder
-import java.time.temporal.ChronoField
 
 class FixNgCodecTest {
     private val dictionary: IDictionaryStructure = FixNgCodecTest::class.java.classLoader
@@ -67,10 +62,13 @@ class FixNgCodecTest {
     fun `simple encode`() = encodeTest(MSG_CORRECT)
 
     @Test
+    fun `simple encode from string values`() = encodeTest(MSG_CORRECT, encodeFromStringValues = true)
+
+    @Test
     fun `simple decode`() = decodeTest(MSG_CORRECT)
 
     @Test
-    fun `simple decode to string values`() = decodeTest(MSG_CORRECT, stringValues = true)
+    fun `simple decode to string values`() = decodeTest(MSG_CORRECT, decodeToStringValues = true)
 
     @Test
     fun `simple decode with no body`() = decodeTest(MSG_CORRECT_WITHOUT_BODY, expectedMessage = expectedMessageWithoutBody)
@@ -123,7 +121,7 @@ class FixNgCodecTest {
     @Test
     fun `encode with required delimiter field in group removed in first entry`() {
         @Suppress("UNCHECKED_CAST")
-        ((parsedBody["TradingParty"] as Map<String, *>)["NoPartyIDs"] as List<MutableMap<String, *>>)[0].remove("PartyID")
+        ((parsedBody["TradingParty"] as Map<String, Any>)["NoPartyIDs"] as List<MutableMap<String, Any>>)[0].remove("PartyID")
         encodeTest(MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_FIRST_ENTRY, "Required field missing. Field name: PartyID.")
     }
 
@@ -137,7 +135,7 @@ class FixNgCodecTest {
     @Test
     fun `encode with required delimiter field in group removed in second entry`() {
         @Suppress("UNCHECKED_CAST")
-        ((parsedBody["TradingParty"] as Map<String, *>)["NoPartyIDs"] as List<MutableMap<String, *>>)[1].remove("PartyID")
+        ((parsedBody["TradingParty"] as Map<String, Any>)["NoPartyIDs"] as List<MutableMap<String, Any>>)[1].remove("PartyID")
         encodeTest(MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_SECOND_ENTRY, "Required field missing. Field name: PartyID.")
     }
 
@@ -237,8 +235,15 @@ class FixNgCodecTest {
 
     private fun encodeTest(
         expectedRawMessage: String,
-        expectedWarning: String? = null
+        expectedWarning: String? = null,
+        encodeFromStringValues: Boolean = false
     ) {
+        if (encodeFromStringValues) {
+            @Suppress("UNCHECKED_CAST")
+            val stringBody = convertValuesToString(parsedBody) as Map<String, Any>
+            parsedBody.putAll(stringBody)
+        }
+
         val encoded = codec.encode(MessageGroup(listOf(parsedMessage)), reportingContext)
         val body = encoded.messages.single().body as CompositeByteBuf
         val fixMsg = body.toString(StandardCharsets.US_ASCII)
@@ -255,7 +260,7 @@ class FixNgCodecTest {
         expectedErrorText: String? = null,
         expectedMessage: ParsedMessage = expectedParsedMessage,
         dirtyMode: Boolean = true,
-        stringValues: Boolean = false
+        decodeToStringValues: Boolean = false
     ) {
         val expectedBody = expectedMessage.body
         val rawMessage = RawMessage(
@@ -266,7 +271,7 @@ class FixNgCodecTest {
         )
 
         val decodedGroup = try {
-            val codec = if (stringValues) FixNgCodec(dictionary, FixNgCodecSettings(dictionary = "")) else this.codec
+            val codec = if (decodeToStringValues) FixNgCodec(dictionary, FixNgCodecSettings(dictionary = "")) else this.codec
             codec.decode(MessageGroup(listOf(rawMessage)), reportingContext)
         } catch (e: IllegalStateException) {
             if (dirtyMode) {
@@ -281,7 +286,7 @@ class FixNgCodecTest {
 
         // we don't validate `CheckSum` and `BodyLength` in incorrect messages
         val fieldsToIgnore = if (expectedErrorText == null) emptyArray() else arrayOf("trailer.CheckSum", "header.BodyLength")
-        val expected = if (stringValues) convertValuesToString(expectedBody) else expectedBody
+        val expected = if (decodeToStringValues) convertValuesToString(expectedBody) else expectedBody
 
         assertThat(parsedMessage.body)
             .usingRecursiveComparison()
@@ -298,10 +303,6 @@ class FixNgCodecTest {
     private fun convertValuesToString(value: Any?): Any = when (value) {
         is Map<*, *> -> value.mapValues { convertValuesToString(it.value) }
         is List<*> -> value.map(::convertValuesToString)
-        is java.lang.Boolean -> if (value.booleanValue()) "Y" else "N"
-        is LocalDateTime -> value.format(dateTimeFormatter)
-        is LocalDate -> value.format(dateFormatter)
-        is LocalTime -> value.format(timeFormatter)
         else -> value.toString()
     }
 
@@ -456,17 +457,5 @@ class FixNgCodecTest {
         private const val MSG_NON_PRINTABLE = "8=FIXT.1.1\u00019=303\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\taccount\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=171\u0001"
         private const val MSG_REQUIRED_HEADER_REMOVED = "8=FIXT.1.1\u00019=236\u000135=8\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=050\u0001"
         private const val MSG_TAG_OUT_OF_ORDER = "8=FIXT.1.1\u00019=295\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=000\u0001999=500\u0001"
-
-        private val dateTimeFormatter = DateTimeFormatterBuilder()
-            .appendPattern("yyyyMMdd-HH:mm:ss")
-            .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
-            .toFormatter()
-
-        private val dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
-
-        private val timeFormatter = DateTimeFormatterBuilder()
-            .appendPattern("HH:mm:ss")
-            .appendFraction(ChronoField.MILLI_OF_SECOND, 0, 9, true)
-            .toFormatter()
     }
 }
