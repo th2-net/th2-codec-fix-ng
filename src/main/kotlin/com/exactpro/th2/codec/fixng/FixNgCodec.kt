@@ -281,8 +281,16 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             handleError(isDirty, context, "Wrong date/time value in ${primitiveType.name} field '$name'. Value: $value.", value)
         }
 
-        return if (isDecodeToStrings) value else decodedValue
-    }
+        return if (isDecodeToStrings) {
+            if (primitiveType == java.time.LocalDateTime::class.java || primitiveType == java.time.LocalDate::class.java || primitiveType == java.time.LocalTime::class.java) {
+                decodedValue.toString()
+            } else {
+                value
+            }
+        } else {
+            decodedValue
+        }
+     }
 
     private fun Group.decode(source: ByteBuf, count: Int, isDirty: Boolean, context: IReportingContext): List<Map<String, Any>> = ArrayList<Map<String, Any>>().also { list ->
         var map: MutableMap<String, Any>? = null

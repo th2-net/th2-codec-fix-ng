@@ -16,8 +16,31 @@
 
 package com.exactpro.th2.codec.fixng
 
+import com.exactpro.sf.common.codecs.AbstractCodec
+import com.exactpro.sf.common.impl.messages.xml.configuration.Dictionary
+import com.exactpro.sf.common.messages.IMessageFactory
 import com.exactpro.sf.common.messages.structures.IDictionaryStructure
 import com.exactpro.sf.common.messages.structures.loaders.XmlDictionaryStructureLoader
+import com.exactpro.sf.common.util.ICommonSettings
+import com.exactpro.sf.configuration.dictionary.FullFIXDictionaryValidatorFactory
+import com.exactpro.sf.configuration.dictionary.interfaces.IDictionaryValidator
+import com.exactpro.sf.configuration.factory.FixMessageFactory
+
+import com.exactpro.sf.configuration.suri.SailfishURI
+import com.exactpro.sf.configuration.workspace.FolderType
+import com.exactpro.sf.externalapi.DictionaryType
+import com.exactpro.sf.externalapi.codec.IExternalCodecSettings
+import com.exactpro.sf.externalapi.codec.PluginAlias
+import com.exactpro.sf.externalapi.codec.ResourcePath
+import com.exactpro.sf.externalapi.codec.impl.AbstractExternalMinaCodecFactory
+import com.exactpro.sf.externalapi.codec.impl.ExternalFixCodecFactory
+import com.exactpro.sf.services.MessageHelper
+import com.exactpro.sf.services.fix.FIXCodec
+import com.exactpro.sf.services.fix.FixMessageHelper
+import com.exactpro.sf.services.tcpip.EvolutionTCPIPSettings
+import com.exactpro.sf.services.tcpip.TCPIPSettings
+import com.exactpro.sf.util.DictionaryValidator
+
 import com.exactpro.th2.codec.api.IReportingContext
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.RawMessage
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.ParsedMessage
@@ -26,11 +49,32 @@ import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.MessageId
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.EventId
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.Direction
 import com.exactpro.th2.codec.fixng.FixNgCodecFactory.Companion.PROTOCOL
+
+import com.exactpro.th2.codec.sailfish.SailfishCodec
+import com.exactpro.th2.codec.sailfish.proto.ProtoDecodeProcessor
+import com.exactpro.th2.codec.sailfish.proto.ProtoDecoder
+import com.exactpro.th2.codec.sailfish.proto.ProtoEncodeProcessor
+import com.exactpro.th2.codec.sailfish.proto.ProtoEncoder
+import com.exactpro.th2.codec.sailfish.transport.TransportDecodeProcessor
+import com.exactpro.th2.codec.sailfish.transport.TransportDecoder
+import com.exactpro.th2.codec.sailfish.transport.TransportEncodeProcessor
+import com.exactpro.th2.codec.sailfish.transport.TransportEncoder
+import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter
+import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter
+import com.exactpro.th2.sailfish.utils.transport.IMessageToTransportConverter
+import com.exactpro.th2.sailfish.utils.transport.TransportToIMessageConverter
+import com.google.common.collect.ArrayTable
+import com.google.common.collect.HashBasedTable
+import com.google.common.collect.Table
+import io.netty.buffer.AbstractReferenceCountedByteBuf
+
 import io.netty.buffer.CompositeByteBuf
 import io.netty.buffer.Unpooled
+import org.apache.commons.configuration.HierarchicalConfiguration
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
+import java.io.File
 import java.math.BigDecimal
 import java.nio.charset.StandardCharsets
 import java.time.Instant
@@ -42,11 +86,73 @@ import java.time.format.DateTimeFormatterBuilder
 import java.time.temporal.ChronoField
 
 class FixNgCodecTest {
-    private val dictionary: IDictionaryStructure = FixNgCodecTest::class.java.classLoader
+    private val fixDictionary: IDictionaryStructure = FixNgCodecTest::class.java.classLoader
         .getResourceAsStream("dictionary.xml")
+        //.getResourceAsStream("FIX50.TEST.xml")
         .use(XmlDictionaryStructureLoader()::load)
 
-    private val codec = FixNgCodec(dictionary, FixNgCodecSettings(dictionary = "", decodeValuesToStrings = false))
+    // private val codec = FixNgCodec(fixDictionary, FixNgCodecSettings(dictionary = "", decodeValuesToStrings = false))
+
+//----------------
+
+    //private val dictionaryValidator = DictionaryValidator()
+    private val fixCodecFactory = object : AbstractExternalMinaCodecFactory() {
+        override val codecClass: Class<out AbstractCodec> = FIXCodec::class.java
+        override val settingsClass: Class<out ICommonSettings> = EvolutionTCPIPSettings::class.java
+        override val messageFactoryClass: Class<out IMessageFactory> = FixMessageFactory::class.java
+        override val messageHelperClass: Class<out MessageHelper> = FixMessageHelper::class.java
+        override val messageHelperParams: Map<String, String> = emptyMap()
+        override val dictionaryValidators: Map<DictionaryType, IDictionaryValidator> = emptyMap()
+    }
+
+    private val fixCodecSettings = object : IExternalCodecSettings {
+        override val dataFiles: MutableMap<SailfishURI, File>
+            get() = mutableMapOf()
+        override val dataResources: Table<PluginAlias, ResourcePath, File>
+            get() = HashBasedTable.create()
+        override val dictionaryFiles: MutableMap<SailfishURI, File>
+            get() = mutableMapOf()
+        override val dictionaryTypes: Set<DictionaryType>
+            get() = setOf(DictionaryType.MAIN)
+        override val propertyTypes: Map<String, Class<*>>
+            get() = TODO("Not yet implemented")
+        override val workspaceFolders: MutableMap<FolderType, File>
+            get() = mutableMapOf(FolderType.TEST_LIBRARY to File("."))
+
+        override fun get(dictionaryType: DictionaryType): IDictionaryStructure? =
+            if (dictionaryType == DictionaryType.MAIN) fixDictionary else null
+
+        override fun <T> get(propertyName: String): T {
+            TODO("Not yet implemented")
+        }
+
+        override fun <T : Any> getSettings(): T = TCPIPSettings() as T
+
+        override fun set(dictionaryType: DictionaryType, dictionary: IDictionaryStructure) {
+            TODO("Not yet implemented")
+        }
+
+        override fun set(propertyName: String, propertyValue: Any?) {
+            TODO("Not yet implemented")
+        }
+    }
+
+    private val messageToProtoConverter = IMessageToProtoConverter()
+    private val protoToMessageConverter = ProtoToIMessageConverter()
+    private val messageToTransportConverter = IMessageToTransportConverter()
+    private val transportToMessageConverter = TransportToIMessageConverter(dictionary = fixDictionary)
+    private val protoEncodeProcessor = ProtoEncodeProcessor(fixCodecFactory, fixCodecSettings, protoToMessageConverter)
+    private val protoDecodeProcessor = ProtoDecodeProcessor(fixCodecFactory, fixCodecSettings, messageToProtoConverter)
+    private val transportEncodeProcessor = TransportEncodeProcessor(fixCodecFactory, fixCodecSettings, transportToMessageConverter)
+    private val transportDecodeProcessor = TransportDecodeProcessor(fixCodecFactory, fixCodecSettings, messageToTransportConverter)
+
+    private val protobufEncoder =  ProtoEncoder(protoEncodeProcessor)
+    private val protobufDecoder =  ProtoDecoder(protoDecodeProcessor)
+    private val transportEncoder = TransportEncoder(transportEncodeProcessor)
+    private val transportDecoder = TransportDecoder(transportDecodeProcessor)
+    private val codec = SailfishCodec(protobufDecoder, protobufEncoder, transportDecoder, transportEncoder)
+
+//----------------
 
     private val reportingContext = object : IReportingContext {
         private val _warnings: MutableList<String> = ArrayList()
@@ -239,8 +345,14 @@ class FixNgCodecTest {
         expectedRawMessage: String,
         expectedWarning: String? = null
     ) {
+        if (true) {
+            val parsedStringBody = convertValuesToString(parsedBody) as Map<String, *>
+            parsedBody.clear()
+            parsedBody.putAll(parsedStringBody)
+        }
+
         val encoded = codec.encode(MessageGroup(listOf(parsedMessage)), reportingContext)
-        val body = encoded.messages.single().body as CompositeByteBuf
+        val body = encoded.messages.single().body as AbstractReferenceCountedByteBuf
         val fixMsg = body.toString(StandardCharsets.US_ASCII)
         assertThat(fixMsg).isEqualTo(expectedRawMessage)
         if (expectedWarning == null) {
@@ -266,7 +378,7 @@ class FixNgCodecTest {
         )
 
         val decodedGroup = try {
-            val codec = if (stringValues) FixNgCodec(dictionary, FixNgCodecSettings(dictionary = "")) else this.codec
+            val codec = if (stringValues) FixNgCodec(fixDictionary, FixNgCodecSettings(dictionary = "")) else this.codec
             codec.decode(MessageGroup(listOf(rawMessage)), reportingContext)
         } catch (e: IllegalStateException) {
             if (dirtyMode) {
@@ -299,9 +411,6 @@ class FixNgCodecTest {
         is Map<*, *> -> value.mapValues { convertValuesToString(it.value) }
         is List<*> -> value.map(::convertValuesToString)
         is java.lang.Boolean -> if (value.booleanValue()) "Y" else "N"
-        is LocalDateTime -> value.format(dateTimeFormatter)
-        is LocalDate -> value.format(dateFormatter)
-        is LocalTime -> value.format(timeFormatter)
         else -> value.toString()
     }
 

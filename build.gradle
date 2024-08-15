@@ -83,6 +83,24 @@ dependencies {
         exclude group: "javax.activation", module: "javax.activation-api" // because of the license
     }
 
+    implementation "com.exactpro.th2:codec-sailfish:5.2.0-dev"
+    implementation "com.exactpro.th2:sailfish-utils:4.1.1-dev"
+    implementation("com.exactpro.sf:service-fix:$sailfishVersion") {
+        exclude group: "io.github.microutils", module: "kotlin-logging"
+        exclude group: "com.fasterxml.jackson.core", module: "jackson-core"
+        exclude group: "com.fasterxml.jackson.core", module: "jackson-databind"
+        exclude group: "com.fasterxml.jackson.core", module: "jackson-annotations"
+        exclude group: "com.fasterxml.jackson", module: "jackson-bom"
+        exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib"
+        exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk7"
+        exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk8"
+        exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-common"
+        exclude group: "org.jetbrains.kotlin", module: "kotlin-reflect"
+        exclude group: "org.jetbrains", module: "annotations"
+        exclude group: "org.slf4j", module: "slf4j-api"
+        exclude group: "com.fasterxml.jackson.module", module: "jackson-module-kotlin"
+    }
+
     implementation "io.netty:netty-buffer"
     implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
     implementation "io.github.oshai:kotlin-logging:5.1.4"
