@@ -81,9 +81,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
             val messageFields = message.body
             @Suppress("UNCHECKED_CAST")
-            val headerFields = messageFields[HEADER] as? Map<String, *> ?: mapOf<String, Any>()
+            val headerFields = messageFields[HEADER] as? Map<String, Any> ?: mapOf()
             @Suppress("UNCHECKED_CAST")
-            val trailerFields = messageFields[TRAILER] as? Map<String, *> ?: mapOf<String, Any>()
+            val trailerFields = messageFields[TRAILER] as? Map<String, Any> ?: mapOf()
 
             val body = Unpooled.buffer(1024)
             val prefix = Unpooled.buffer(32)
@@ -282,7 +282,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         }
 
         return if (isDecodeToStrings) {
-            if (primitiveType == java.time.LocalDateTime::class.java || primitiveType == java.time.LocalDate::class.java || primitiveType == java.time.LocalTime::class.java) {
+            if (primitiveType == java.time.LocalDateTime::class.java || primitiveType == java.time.LocalDate::class.java || primitiveType == java.time.LocalTime::class.java || primitiveType == java.lang.Boolean::class.java) {
                 decodedValue.toString()
             } else {
                 value
@@ -290,7 +290,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         } else {
             decodedValue
         }
-     }
+    }
 
     private fun Group.decode(source: ByteBuf, count: Int, isDirty: Boolean, context: IReportingContext): List<Map<String, Any>> = ArrayList<Map<String, Any>>().also { list ->
         var map: MutableMap<String, Any>? = null
@@ -326,22 +326,40 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     private fun encodeField(field: Field, value: Any, target: ByteBuf, isDirty: Boolean, dictionaryFields: Map<String, Field>, context: IReportingContext) {
         when {
             field is Primitive -> {
-                if (!isCompatibleType(value.javaClass, field.primitiveType)) {
-                    if (value is String) {
-                        field.decode(value, isDirty, context) // validate if String value could be parsed to required type
-                        target.writeField(field.tag, value, charset)
-                        return
-                    } else {
-                        handleError(isDirty, context, "Wrong type value in field ${field.name}. Actual: ${value.javaClass} (value: $value). Expected ${field.primitiveType}")
+                val valueToEncode = when {
+                    isCompatibleType(value.javaClass, field.primitiveType) -> value
+                    value is String -> {
+                        try {
+                            when (field.primitiveType) {
+                                LocalDateTime::class.java -> LocalDateTime.parse(value)
+                                LocalDate::class.java -> LocalDate.parse(value)
+                                LocalTime::class.java -> LocalTime.parse(value)
+                                java.lang.Boolean::class.java -> when {
+                                    value.equals("true", true) -> true
+                                    value.equals("false", true) -> false
+                                    else -> handleError(isDirty, context, "Wrong boolean value in ${field.primitiveType.name} field '$field.name'. Value: $value.", value)
+                                }
+                                else -> {
+                                    // we reuse decode() method for the types that have the same string representation
+                                    // of values in FIX protocol and in TH2 transport protocol
+                                    field.decode(value, isDirty, context) // validate if String value could be parsed to required type
+                                    target.writeField(field.tag, value, charset)
+                                    return
+                                }
+                            }
+                        } catch (e: DateTimeParseException) {
+                            handleError(isDirty, context, "Wrong date/time value in ${field.primitiveType.name} field '$field.name'. Value: $value.", value)
+                        }
                     }
+                    else -> handleError(isDirty, context, "Wrong type value in field ${field.name}. Actual: ${value.javaClass} (value: $value). Expected ${field.primitiveType}")
                 }
 
-                val stringValue = when (value) {
-                    is java.lang.Boolean -> if (value.booleanValue()) "Y" else "N"
-                    is LocalDateTime -> value.format(dateTimeFormatter)
-                    is LocalDate -> value.format(dateFormatter)
-                    is LocalTime -> value.format(timeFormatter)
-                    else -> value.toString()
+                val stringValue = when (valueToEncode) {
+                    is LocalDateTime -> valueToEncode.format(dateTimeFormatter)
+                    is LocalDate -> valueToEncode.format(dateFormatter)
+                    is LocalTime -> valueToEncode.format(timeFormatter)
+                    is java.lang.Boolean -> if (valueToEncode.booleanValue()) "Y" else "N"
+                    else -> valueToEncode.toString()
                 }
 
                 when {
@@ -558,7 +576,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         )
 
         private fun getFirstTag(message: IMessageStructure): Int = message.fields.values.first().let {
-            if (it is IMessageStructure) getFirstTag(it) else it.tag
+            if (it is IMessageStructure && it.isComponent) getFirstTag(it) else it.tag
         }
 
         private fun IMessageStructure.toGroup(isForEncode: Boolean): Group = Group(
