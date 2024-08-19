@@ -47,9 +47,10 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     private val charset = settings.charset
     private val isDirtyMode = settings.dirtyMode
     private val isDecodeToStrings = settings.decodeValuesToStrings
+    private val isDecodeComponentsToNestedMaps = settings.decodeComponentsToNestedMaps
 
-    private val fieldsEncode = convertToFieldsByName(dictionary.fields, true)
-    private val fieldsDecode = convertToFieldsByTag(dictionary.fields)
+    private val fieldsEncode = convertToFieldsByName(dictionary.fields, true, emptyList())
+    private val fieldsDecode = convertToFieldsByTag(dictionary.fields, emptyList())
     private val messagesByTypeForDecode: Map<String, Message>
     private val messagesByNameForEncode: Map<String, Message>
 
@@ -169,6 +170,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     private fun Field.decode(
         source: ByteBuf,
         target: MutableMap<String, Any>,
+        tagsSet: MutableSet<Int>,
         value: String,
         tag: Int,
         isDirty: Boolean,
@@ -190,23 +192,37 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             }
         }
 
-        // in dirty mode we'll use tag as field name if we have field duplication
-        val fieldName = if (isDirty && target.contains(name)) {
-            tag.toString()
+        if (!tagsSet.add(tag)) {
+            handleError(isDirty, context, "Duplicate $name field ($tag) with value: $value", value)
+        }
+
+        val targetMap = if (isDecodeComponentsToNestedMaps) {
+            @Suppress("UNCHECKED_CAST")
+            path.fold(target) { map, key -> map.computeIfAbsent(key) { mutableMapOf<String, Any>() } as MutableMap<String, Any> }
+        } else {
+            target
+        }
+
+        val fieldName = if (isDirty && targetMap.contains(name)) {
+            // in dirty mode we'll use tag as field name if we have field duplication
+            val tagName = tag.toString()
+            if (targetMap.contains(tagName)) {
+                // but even in dirty mode we can't write field if it's duplicated more than once
+                // because we use Map and it cant contain duplicates
+                error("Failed to add value because of duplicates. Field name: $name (tag: $tag). Field path: $path. Value: $value")
+            }
+            tagName
         } else {
             name
         }
 
-        val previous = target.put(fieldName, decodedValue)
-
-        // but even in dirty mode we can't write field if it's duplicated more than once
-        // because we use Map and it cant contain duplicates
-        check(previous == null) { "Duplicate $name field ($tag) with value: $value (previous: $previous)" }
+        targetMap[fieldName] = decodedValue
     }
 
     private val prereadHeaderFields = arrayOf("BeginString", "BodyLength", "MsgType")
 
     private fun Message.decode(source: ByteBuf, bodyDef: Message, isDirty: Boolean, dictionaryFields: Map<Int, Field>, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
+        val tagsSet: MutableSet<Int> = hashSetOf()
         source.forEachField(charset, isDirty) { tag, value ->
             val field = get(tag) ?: if (isDirty) {
                 when (this) {
@@ -221,19 +237,27 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                     dictField
                 } else {
                     context.warning(DIRTY_MODE_WARNING_PREFIX + "Field does not exist in dictionary. Field tag: $tag. Field value: $value.")
-                    Primitive(false, tag.toString(), String::class.java, emptySet(), tag)
+                    Primitive(false, tag.toString(), emptyList(), String::class.java, emptySet(), tag)
                 }
             } else {
                 // we reached next part of the message
                 return@forEachField false
             }
 
-            field.decode(source, map, value, tag, isDirty, context)
+            field.decode(source, map, tagsSet, value, tag, isDirty, context)
             return@forEachField true
         }
 
         for (field in fields.values) {
-            if (field.isRequired && !map.contains(field.name) && field.name !in prereadHeaderFields) {
+            if (!field.isRequired) continue
+
+            val tag = when (field) {
+                is Primitive -> field.tag
+                is Group -> field.counter
+                else -> error("Only `Primitive` and `Group` fields expected to be `required`")
+            }
+
+            if (!tagsSet.contains(tag) && field.name !in prereadHeaderFields) {
                 handleError(isDirty, context, "Required field missing. Field name: ${field.name}.")
             }
         }
@@ -299,7 +323,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         source.forEachField(charset, isDirty) { tag, value ->
             val field = get(tag) ?: return@forEachField false
 
-            val group = if (tag == delimiter || !tags.add(tag) || map == null) {
+            val group = if (tag == delimiter || tags.contains(tag) || map == null) {
                 if (tag != delimiter) {
                     handleError(isDirty, context, "Field ${field.name} ($tag) appears before delimiter ($delimiter)")
                 }
@@ -313,7 +337,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 map ?: error("Group entry map can't be null.")
             }
 
-            field.decode(source, group, value, tag, isDirty, context)
+            field.decode(source, group, tags, value, tag, isDirty, context)
             return@forEachField true
         }
 
@@ -432,11 +456,13 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     interface Field {
         val isRequired: Boolean
         val name: String
+        val path: List<String>
     }
 
     data class Primitive(
         override val isRequired: Boolean,
         override val name: String,
+        override val path: List<String>,
         val primitiveType: Class<*>,
         val values: Set<String>,
         val tag: Int
@@ -463,6 +489,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     data class Message(
         override val isRequired: Boolean,
         override val name: String,
+        override val path: List<String>,
         val type: String,
         override val fields: Map<String, Field>,
     ) : Field, FieldMap()
@@ -470,6 +497,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     data class Group(
         override val isRequired: Boolean,
         override val name: String,
+        override val path: List<String>,
         val counter: Int,
         val delimiter: Int,
         override val fields: Map<String, Field>,
@@ -536,42 +564,44 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         private val IFieldStructure.tag: Int
             get() = StructureUtils.getAttributeValue(this, "tag")
 
-        private fun IFieldStructure.toPrimitive(): Primitive = Primitive(
+        private fun IFieldStructure.toPrimitive(path: List<String>): Primitive = Primitive(
             isRequired,
             name,
+            path,
             javaTypeToClass.getValue(javaType),
             values.values.map<IAttributeStructure, String> { it.getCastValue<Any>().toString() }.toSet(),
             tag
         )
 
-        private fun convertToFieldsByName(fields: Map<String, IFieldStructure>, isForEncode: Boolean): Map<String, Field> = linkedMapOf<String, Field>().apply {
+        private fun convertToFieldsByName(fields: Map<String, IFieldStructure>, isForEncode: Boolean, path: List<String>): Map<String, Field> = linkedMapOf<String, Field>().apply {
             fields.forEach { (name, field) ->
                 when {
-                    field !is IMessageStructure -> this[name] = field.toPrimitive()
-                    field.isGroup -> this[name] = field.toGroup(isForEncode)
+                    field !is IMessageStructure -> this[name] = field.toPrimitive(path)
+                    field.isGroup -> this[name] = field.toGroup(isForEncode, path)
                     field.isComponent -> if (isForEncode) {
-                        this[name] = field.toMessage(true)
+                        this[name] = field.toMessage(true, path + name)
                     } else {
-                        this += convertToFieldsByName(field.fields, false)
+                        this += convertToFieldsByName(field.fields, false, path + name)
                     }
                 }
             }
         }
 
-        private fun convertToFieldsByTag(fields: Map<String, IFieldStructure>): Map<Int, Field>  = linkedMapOf<Int, Field>().apply {
+        private fun convertToFieldsByTag(fields: Map<String, IFieldStructure>, path: List<String>): Map<Int, Field>  = linkedMapOf<Int, Field>().apply {
             fields.values.forEach { field ->
                 when {
-                    field !is IMessageStructure -> this[field.tag] = field.toPrimitive()
-                    field.isGroup -> this[field.tag] = field.toGroup(false)
-                    field.isComponent -> this += convertToFieldsByTag(field.fields)
+                    field !is IMessageStructure -> this[field.tag] = field.toPrimitive(path)
+                    field.isGroup -> this[field.tag] = field.toGroup(false, path)
+                    field.isComponent -> this += convertToFieldsByTag(field.fields, path + field.name)
                 }
             }
         }
 
-        private fun IMessageStructure.toMessage(isForEncode: Boolean): Message = Message(
+        private fun IMessageStructure.toMessage(isForEncode: Boolean, path: List<String>): Message = Message(
             name = name,
             type = StructureUtils.getAttributeValue(this, FIELD_MESSAGE_TYPE) ?: name,
-            fields = convertToFieldsByName(this.fields, isForEncode),
+            fields = convertToFieldsByName(this.fields, isForEncode, path),
+            path = path,
             isRequired = isRequired
         )
 
@@ -579,16 +609,17 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             if (it is IMessageStructure && it.isComponent) getFirstTag(it) else it.tag
         }
 
-        private fun IMessageStructure.toGroup(isForEncode: Boolean): Group = Group(
+        private fun IMessageStructure.toGroup(isForEncode: Boolean, path: List<String>): Group = Group(
             name = name,
             counter = tag,
             delimiter = getFirstTag(this),
-            fields = convertToFieldsByName(this.fields, isForEncode),
+            fields = convertToFieldsByName(this.fields, isForEncode, emptyList()),
+            path = path,
             isRequired = isRequired
         )
 
         fun IDictionaryStructure.toMessages(isForEncode: Boolean): List<Message> = messages.values
             .filterNot { it.isGroup || it.isComponent }
-            .map { it.toMessage(isForEncode) }
+            .map { it.toMessage(isForEncode, emptyList()) }
     }
 }

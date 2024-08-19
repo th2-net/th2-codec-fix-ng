@@ -81,7 +81,7 @@ class FixNgCodecTest {
 
     @Test
     fun `decode with addition field that exists in dictionary`() {
-        expectedParsedBody["CFICode"] = "12345"
+        parsedBody["CFICode"] = "12345"
         decodeTest(MSG_ADDITIONAL_FIELD_DICT, "Unexpected field in message. Field name: CFICode. Field value: 12345.")
     }
 
@@ -96,7 +96,7 @@ class FixNgCodecTest {
 
     @Test
     fun `decode with addition field that does not exists in dictionary`() {
-        expectedParsedBody["9999"] = "54321"
+        parsedBody["9999"] = "54321"
         decodeTest(MSG_ADDITIONAL_FIELD_NO_DICT, "Field does not exist in dictionary. Field tag: 9999. Field value: 54321.")
     }
 
@@ -114,7 +114,7 @@ class FixNgCodecTest {
 
     @Test
     fun `decode with required field removed`() {
-        expectedParsedBody.remove("ExecID")
+        parsedBody.remove("ExecID")
         decodeTest(MSG_REQUIRED_FIELD_REMOVED, "Required field missing. Field name: ExecID.")
     }
 
@@ -128,7 +128,7 @@ class FixNgCodecTest {
     @Test
     fun `decode with required delimiter field in group removed in first entry`() {
         @Suppress("UNCHECKED_CAST")
-        (expectedParsedBody["NoPartyIDs"] as MutableList<MutableMap<String, Any>>)[0].remove("PartyID")
+        ((parsedBody["TradingParty"] as Map<String, Any>)["NoPartyIDs"] as List<MutableMap<String, Any>>)[0].remove("PartyID")
         decodeTest(MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_FIRST_ENTRY, "Field PartyIDSource (447) appears before delimiter (448)")
     }
 
@@ -142,7 +142,7 @@ class FixNgCodecTest {
     @Test
     fun `decode with required delimiter field in group removed in second entry`() {
         @Suppress("UNCHECKED_CAST")
-        (expectedParsedBody["NoPartyIDs"] as MutableList<MutableMap<String, Any>>)[1].remove("PartyID")
+        ((parsedBody["TradingParty"] as Map<String, Any>)["NoPartyIDs"] as List<MutableMap<String, Any>>)[1].remove("PartyID")
         decodeTest(MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_SECOND_ENTRY, "Field PartyIDSource (447) appears before delimiter (448)")
     }
 
@@ -154,7 +154,7 @@ class FixNgCodecTest {
 
     @Test
     fun `decode with wrong enum value`() {
-        expectedParsedBody["ExecType"] = 'X'
+        parsedBody["ExecType"] = 'X'
         decodeTest(MSG_WRONG_ENUM, "Invalid value in enum field ExecType. Actual: X.")
     }
 
@@ -178,7 +178,7 @@ class FixNgCodecTest {
 
     @Test
     fun `decode with wrong value type`() {
-        expectedParsedBody["LeavesQty"] = "Five"
+        parsedBody["LeavesQty"] = "Five"
         decodeTest(MSG_WRONG_TYPE, "Wrong number value in java.math.BigDecimal field 'LeavesQty'. Value: Five.")
     }
 
@@ -190,7 +190,7 @@ class FixNgCodecTest {
 
     @Test
     fun `decode with empty value`() {
-        expectedParsedBody["Account"] = ""
+        parsedBody["Account"] = ""
         decodeTest(MSG_EMPTY_VAL, "Empty value in the field 'Account'.")
     }
 
@@ -202,7 +202,7 @@ class FixNgCodecTest {
 
     @Test
     fun `decode with non printable characters`() {
-        expectedParsedBody["Account"] = "test\taccount"
+        parsedBody["Account"] = "test\taccount"
         decodeTest(MSG_NON_PRINTABLE, "Non printable characters in the field 'Account'.")
     }
 
@@ -258,7 +258,7 @@ class FixNgCodecTest {
     private fun decodeTest(
         rawMessageString: String,
         expectedErrorText: String? = null,
-        expectedMessage: ParsedMessage = expectedParsedMessage,
+        expectedMessage: ParsedMessage = parsedMessage,
         dirtyMode: Boolean = true,
         decodeToStringValues: Boolean = false
     ) {
@@ -328,7 +328,7 @@ class FixNgCodecTest {
             "OrderID" to "49415882",
             "ExecType" to '0',
             "OrdStatus" to '0',
-            "LeavesQty" to 500,
+            "LeavesQty" to BigDecimal(500),
             "CumQty" to BigDecimal(500),
             "SecurityID" to "NWDR",
             "SecurityIDSource" to "8",
@@ -351,8 +351,8 @@ class FixNgCodecTest {
             "TimeInForce" to '0',
             "Side" to 'B',
             "Symbol" to "ABC",
-            "OrderQty" to 500,
-            "Price" to 1000,
+            "OrderQty" to BigDecimal(500),
+            "Price" to BigDecimal(1000),
             "Unknown" to "500",
             "TransactTime" to LocalDateTime.parse("2018-02-05T10:38:08.000008"),
             "trailer" to mutableMapOf(
@@ -362,61 +362,6 @@ class FixNgCodecTest {
     )
 
     private val parsedBody: MutableMap<String, Any?> = parsedMessage.body as MutableMap
-
-    private val expectedParsedMessage = ParsedMessage(
-        MessageId("test_alias", Direction.OUTGOING, 0L, Instant.now(), emptyList()),
-        EventId("test_id", "test_book", "test_scope", Instant.now()),
-        "ExecutionReport",
-        mutableMapOf("encode-mode" to "dirty"),
-        PROTOCOL,
-        mutableMapOf(
-            "header" to mapOf(
-                "MsgSeqNum" to 10947,
-                "SenderCompID" to "SENDER",
-                "SendingTime" to LocalDateTime.parse("2023-04-19T10:36:07.415088"),
-                "TargetCompID" to "RECEIVER",
-                "BeginString" to "FIXT.1.1",
-                "BodyLength" to 295,
-                "MsgType" to "8"
-            ),
-            "ExecID" to "495504662",
-            "ClOrdID" to "zSuNbrBIZyVljs",
-            "OrigClOrdID" to "zSuNbrBIZyVljs",
-            "OrderID" to "49415882",
-            "ExecType" to '0',
-            "OrdStatus" to '0',
-            "LeavesQty" to BigDecimal(500),
-            "CumQty" to BigDecimal(500),
-            "SecurityID" to "NWDR",
-            "SecurityIDSource" to "8",
-            "NoPartyIDs" to listOf(
-                mapOf(
-                    "PartyID" to "NGALL1FX01",
-                    "PartyIDSource" to 'D',
-                    "PartyRole" to 76
-                ),
-                mapOf(
-                    "PartyID" to "0",
-                    "PartyIDSource" to 'P',
-                    "PartyRole" to 3
-                )
-            ),
-            "Account" to "test",
-            "OrdType" to 'A',
-            "TimeInForce" to '0',
-            "Side" to 'B',
-            "Symbol" to "ABC",
-            "OrderQty" to BigDecimal(500),
-            "Price" to BigDecimal(1000),
-            "Unknown" to "500",
-            "TransactTime" to LocalDateTime.parse("2018-02-05T10:38:08.000008"),
-            "trailer" to mapOf(
-                "CheckSum" to "191"
-            )
-        )
-    )
-
-    private val expectedParsedBody: MutableMap<String, Any?> = expectedParsedMessage.body as MutableMap
 
     private val expectedMessageWithoutBody = ParsedMessage(
         MessageId("test_alias", Direction.OUTGOING, 0L, Instant.now(), emptyList()),

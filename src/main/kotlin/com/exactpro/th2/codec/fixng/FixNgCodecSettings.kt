@@ -25,4 +25,5 @@ data class FixNgCodecSettings(
     val charset: Charset = Charsets.US_ASCII,
     val dirtyMode: Boolean = false,
     val decodeValuesToStrings: Boolean = true,
+    val decodeComponentsToNestedMaps: Boolean = true
 ) : IPipelineCodecSettings
