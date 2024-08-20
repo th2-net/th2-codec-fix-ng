@@ -17,6 +17,7 @@ dictionary: fix_dictionary.xml
 charset: US_ASCII
 dirtyMode: false
 decodeValuesToStrings: true
+decodeComponentsToNestedMaps: true
 ```
 
 #### beginString
@@ -32,7 +33,10 @@ default value: `US_ASCII`. Charset for reading and writing FIX fields.
 default value: `false`. If `true`, processes all messages in dirty mode (generates warnings on invalid messages and continues processing). If `false`, only messages that contain the `encode-mode: dirty` property will be processed in dirty mode.
 
 #### decodeValuesToStrings
-default value: `true`. Decode all values to strings instead of typed values.
+default value: `true`. If `true`, decodes all values to strings instead of typed values.
+
+#### decodeComponentsToNestedMaps
+default value: `true`. If `true`, decodes `components` to nested maps instead of unwrap component's map to message's main map.
 
 ## Release notes
 ### 0.1.0
