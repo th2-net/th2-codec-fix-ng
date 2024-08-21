@@ -115,7 +115,7 @@ class FixNgCodecTest {
     @Test
     fun `decode with required field removed`() {
         parsedBody.remove("ExecID")
-        decodeTest(MSG_REQUIRED_FIELD_REMOVED, "Required field missing. Field name: ExecID.")
+        decodeTest(MSG_REQUIRED_FIELD_REMOVED, "Required tag missing. Tag: 17.")
     }
 
     @Test

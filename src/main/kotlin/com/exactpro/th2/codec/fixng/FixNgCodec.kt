@@ -207,10 +207,12 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         targetMap[name] = decodedValue
     }
 
-    private val prereadHeaderFields = arrayOf("BeginString", "BodyLength", "MsgType")
+    private val prereadHeaderTags = arrayOf(8 /* BeginString */, 9 /* BodyLength */, 35 /* MsgType */)
 
     private fun Message.decode(source: ByteBuf, bodyDef: Message, isDirty: Boolean, dictionaryFields: Map<Int, Field>, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
-        val tagsSet: MutableSet<Int> = hashSetOf()
+        val tagsSet: MutableSet<Int> = hashSetOf(*prereadHeaderTags)
+        val usedComponents = mutableSetOf<String>()
+
         source.forEachField(charset, isDirty) { tag, value ->
             val field = get(tag) ?: if (isDirty) {
                 when (this) {
@@ -232,21 +234,23 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 return@forEachField false
             }
 
+            usedComponents.addAll(field.path)
+
             field.decode(source, map, tagsSet, value, tag, isDirty, context)
             return@forEachField true
         }
 
-        for (field in fields.values) {
-            if (!field.isRequired) continue
+        validateRequiredTags(requiredTags, tagsSet, isDirty, context)
+        for (componentName in usedComponents) {
+            val requiredTags = conditionallyRequiredTags[componentName] ?: continue
+            validateRequiredTags(requiredTags, tagsSet, isDirty, context)
+        }
+    }
 
-            val tag = when (field) {
-                is Primitive -> field.tag
-                is Group -> field.counter
-                else -> error("Only `Primitive` and `Group` fields expected to be `required`")
-            }
-
-            if (!tagsSet.contains(tag) && field.name !in prereadHeaderFields) {
-                handleError(isDirty, context, "Required field missing. Field name: ${field.name}.")
+    private fun validateRequiredTags(requiredTags: Set<Int>, tagsSet: Set<Int>, isDirty: Boolean, context: IReportingContext) {
+        for (tag in requiredTags) {
+            if (!tagsSet.contains(tag)) {
+                handleError(isDirty, context, "Required tag missing. Tag: ${tag}.")
             }
         }
     }
@@ -480,6 +484,8 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         override val path: List<String>,
         val type: String,
         override val fields: Map<String, Field>,
+        val requiredTags: Set<Int>,
+        val conditionallyRequiredTags: Map<String, Set<Int>>
     ) : Field, FieldMap()
 
     data class Group(
@@ -565,7 +571,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             fields.forEach { (name, field) ->
                 when {
                     field !is IMessageStructure -> this[name] = field.toPrimitive(path, isForEncode || isRequiredParent)
-                    field.isGroup -> this[name] = field.toGroup(isForEncode, path, isForEncode || isRequiredParent)
+                    field.isGroup -> this[name] = field.toGroup(isForEncode, path)
                     field.isComponent -> if (isForEncode) {
                         this[name] = field.toMessage(true, path + name)
                     } else {
@@ -579,10 +585,37 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             fields.values.forEach { field ->
                 when {
                     field !is IMessageStructure -> this[field.tag] = field.toPrimitive(path, true)
-                    field.isGroup -> this[field.tag] = field.toGroup(false, path, true)
+                    field.isGroup -> this[field.tag] = field.toGroup(false, path)
                     field.isComponent -> this += convertToFieldsByTag(field.fields, path + field.name)
                 }
             }
+        }
+
+        private fun collectRequiredTags(fields: Map<String, IFieldStructure>, target: MutableSet<Int>): Set<Int> {
+            for (field in fields.values) {
+                when {
+                    !field.isRequired -> continue
+                    field !is IMessageStructure -> target.add(field.tag)
+                    field.isGroup -> target.add(field.tag)
+                    field.isComponent -> collectRequiredTags(field.fields, target)
+                }
+            }
+            return target
+        }
+
+        private fun collectConditionallyRequiredTags(fields: Map<String, IFieldStructure>, isParentRequired: Boolean, target: MutableMap<String, Set<Int>>): Map<String, Set<Int>> {
+            for (field in fields.values) {
+                if (field is IMessageStructure && field.isComponent) {
+                    val isCurrentRequired = isParentRequired && field.isRequired
+                    // There is no point in adding tags from optional components that contain only one field
+                    // (such a field is effectively optional even if it has a required flag).
+                    if (!isCurrentRequired && field.fields.size > 1) {
+                        target[field.name] = collectRequiredTags(field.fields, mutableSetOf())
+                    }
+                    collectConditionallyRequiredTags(field.fields, isCurrentRequired, target)
+                }
+            }
+            return target
         }
 
         private fun IMessageStructure.toMessage(isForEncode: Boolean, path: List<String>): Message = Message(
@@ -590,20 +623,22 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             type = StructureUtils.getAttributeValue(this, FIELD_MESSAGE_TYPE) ?: name,
             fields = convertToFieldsByName(this.fields, isForEncode, path, !isComponent || isRequired),
             path = path,
-            isRequired = isRequired
+            isRequired = isRequired,
+            requiredTags = if (isForEncode) emptySet() else collectRequiredTags(fields, mutableSetOf()),
+            conditionallyRequiredTags = if (isForEncode) emptyMap() else collectConditionallyRequiredTags(fields, true, mutableMapOf())
         )
 
         private fun getFirstTag(message: IMessageStructure): Int = message.fields.values.first().let {
             if (it is IMessageStructure && it.isComponent) getFirstTag(it) else it.tag
         }
 
-        private fun IMessageStructure.toGroup(isForEncode: Boolean, path: List<String>, isRequiredParent: Boolean): Group = Group(
+        private fun IMessageStructure.toGroup(isForEncode: Boolean, path: List<String>): Group = Group(
             name = name,
             counter = tag,
             delimiter = getFirstTag(this),
             fields = convertToFieldsByName(this.fields, isForEncode, emptyList(), true),
             path = path,
-            isRequired = isRequiredParent && isRequired
+            isRequired = isRequired
         )
 
         fun IDictionaryStructure.toMessages(isForEncode: Boolean): List<Message> = messages.values
