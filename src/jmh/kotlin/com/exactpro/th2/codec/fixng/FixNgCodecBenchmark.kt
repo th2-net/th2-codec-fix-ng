@@ -48,7 +48,7 @@ open class BenchmarkState {
     @Setup(Level.Trial)
     fun setup() {
         val dictionary: IDictionaryStructure = FixNgCodecTest::class.java.classLoader
-            .getResourceAsStream("dictionary.xml")
+            .getResourceAsStream("dictionary-benchmark.xml")
             .use(XmlDictionaryStructureLoader()::load)
 
         codec = FixNgCodec(dictionary, FixNgCodecSettings(dictionary = "", decodeValuesToStrings = true))
