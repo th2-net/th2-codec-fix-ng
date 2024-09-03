@@ -233,6 +233,76 @@ class FixNgCodecTest {
     fun `tag appears out of order`() =
         decodeTest(MSG_TAG_OUT_OF_ORDER, "Tag appears out of order: 999", dirtyMode = false)
 
+    @Test
+    fun `decode nested components`() =
+        decodeTest(MSG_NESTED_REQ_COMPONENTS, expectedMessage = parsedMessageWithNestedComponents)
+
+    @Test
+    fun `decode with missing req field in req nested component`() {
+        @Suppress("UNCHECKED_CAST")
+        (parsedBodyWithNestedComponents["OuterComponent"] as MutableMap<String, MutableMap<String, Any>>)["InnerComponent"]?.remove("OrdType")
+        decodeTest(MSG_NESTED_REQ_COMPONENTS_MISSED_REQ, expectedErrorText = "Required tag missing. Tag: 40.", expectedMessage = parsedMessageWithNestedComponents)
+    }
+
+    @Test
+    fun `decode with missing optional field in req nested component`() {
+        @Suppress("UNCHECKED_CAST")
+        (parsedBodyWithNestedComponents["OuterComponent"] as MutableMap<String, MutableMap<String, Any>>)["InnerComponent"]?.remove("Text")
+        decodeTest(MSG_NESTED_REQ_COMPONENTS_MISSED_OPTIONAL, expectedMessage = parsedMessageWithNestedComponents)
+    }
+
+    private fun convertToOptionalComponent(): ParsedMessage {
+        @Suppress("UNCHECKED_CAST")
+        (parsedBodyWithNestedComponents["header"] as MutableMap<String, String>)["MsgType"] = "TEST_2"
+        val msgBuilder = parsedMessageWithNestedComponents.toBuilder()
+        msgBuilder.setType("NestedOptionalComponentTestMessage")
+        return msgBuilder.build()
+    }
+
+    @Test
+    fun `decode nested optional components`() {
+        val message = convertToOptionalComponent()
+        decodeTest(MSG_NESTED_OPT_COMPONENTS, expectedMessage = message)
+    }
+
+    @Test
+    fun `decode with missing req field in opt nested component`() {
+        val message = convertToOptionalComponent()
+        @Suppress("UNCHECKED_CAST")
+        (parsedBodyWithNestedComponents["OuterComponent"] as MutableMap<String, MutableMap<String, Any>>)["InnerComponent"]?.remove("OrdType")
+        decodeTest(MSG_NESTED_OPT_COMPONENTS_MISSED_REQ, expectedErrorText = "Required tag missing. Tag: 40.", expectedMessage = message)
+    }
+
+    @Test
+    fun `decode with missing all fields in opt nested component`() {
+        val message = convertToOptionalComponent()
+        @Suppress("UNCHECKED_CAST")
+        (parsedBodyWithNestedComponents["OuterComponent"] as MutableMap<String, MutableMap<String, Any>>).remove("InnerComponent")
+        decodeTest(MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS, expectedErrorText = "Required tag missing. Tag: 40.", expectedMessage = message)
+    }
+
+    @Test
+    fun `decode with missing all fields in inner and outer nested components`() {
+        val message = convertToOptionalComponent()
+        parsedBodyWithNestedComponents.remove("OuterComponent")
+        decodeTest(MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS_INNER_AND_OUTER, expectedMessage = message)
+    }
+
+    @Test
+    fun `decode with missing req fields in both inner and outer components`() {
+        val message = convertToOptionalComponent()
+        @Suppress("UNCHECKED_CAST")
+        (parsedBodyWithNestedComponents["OuterComponent"] as MutableMap<String, MutableMap<String, Any>>).remove("LeavesQty")
+        @Suppress("UNCHECKED_CAST")
+        (parsedBodyWithNestedComponents["OuterComponent"] as MutableMap<String, MutableMap<String, Any>>)["InnerComponent"]!!.remove("OrdType")
+        decodeTest(
+            MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_OUTER_FIELDS_AND_REQ_INNER_FIELD,
+            expectedErrorText = "Required tag missing. Tag: 40.",
+            expectedSecondErrorText = "Required tag missing. Tag: 151.",
+            expectedMessage = message
+        )
+    }
+
     private fun encodeTest(
         expectedRawMessage: String,
         expectedWarning: String? = null,
@@ -258,6 +328,7 @@ class FixNgCodecTest {
     private fun decodeTest(
         rawMessageString: String,
         expectedErrorText: String? = null,
+        expectedSecondErrorText: String? = null,
         expectedMessage: ParsedMessage = parsedMessage,
         dirtyMode: Boolean = true,
         decodeToStringValues: Boolean = false
@@ -296,7 +367,13 @@ class FixNgCodecTest {
         if (expectedErrorText == null) {
             assertThat(reportingContext.warnings).isEmpty()
         } else {
-            assertThat(reportingContext.warnings.single()).startsWith(DIRTY_MODE_WARNING_PREFIX + expectedErrorText)
+            if (expectedSecondErrorText == null) {
+                assertThat(reportingContext.warnings.single()).startsWith(DIRTY_MODE_WARNING_PREFIX + expectedErrorText)
+            } else {
+                assertThat(reportingContext.warnings).size().isEqualTo(2)
+                assertThat(reportingContext.warnings[0]).startsWith(DIRTY_MODE_WARNING_PREFIX + expectedErrorText)
+                assertThat(reportingContext.warnings[1]).startsWith(DIRTY_MODE_WARNING_PREFIX + expectedSecondErrorText)
+            }
         }
     }
 
@@ -385,6 +462,35 @@ class FixNgCodecTest {
         )
     )
 
+    private val parsedMessageWithNestedComponents = ParsedMessage(
+        MessageId("test_alias", Direction.OUTGOING, 0L, Instant.now(), emptyList()),
+        EventId("test_id", "test_book", "test_scope", Instant.now()),
+        "NestedRequiredComponentTestMessage",
+        mutableMapOf("encode-mode" to "dirty"),
+        PROTOCOL,
+        mutableMapOf(
+            "header" to mutableMapOf(
+                "BeginString" to "FIXT.1.1",
+                "BodyLength" to 59,
+                "MsgType" to "TEST_1",
+                "MsgSeqNum" to 125,
+                "TargetCompID" to "INET",
+                "SenderCompID" to "MZHOT0"
+            ),
+            "OuterComponent" to mutableMapOf(
+                "LeavesQty" to BigDecimal(1234), // tag 151
+                "InnerComponent" to mutableMapOf(
+                    "Text" to "text_1", // tag 58
+                    "OrdType" to '1' // 40
+                )
+            ),
+            "trailer" to mapOf(
+                "CheckSum" to "191"
+            )
+        )
+    )
+    private val parsedBodyWithNestedComponents: MutableMap<String, Any?> = parsedMessageWithNestedComponents.body as MutableMap
+
     companion object {
         private const val DIRTY_MODE_WARNING_PREFIX = "Dirty mode WARNING: "
 
@@ -402,5 +508,15 @@ class FixNgCodecTest {
         private const val MSG_NON_PRINTABLE = "8=FIXT.1.1\u00019=303\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\taccount\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=171\u0001"
         private const val MSG_REQUIRED_HEADER_REMOVED = "8=FIXT.1.1\u00019=236\u000135=8\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=050\u0001"
         private const val MSG_TAG_OUT_OF_ORDER = "8=FIXT.1.1\u00019=295\u000135=8\u000149=SENDER\u000156=RECEIVER\u000134=10947\u000152=20230419-10:36:07.415088\u000117=495504662\u000111=zSuNbrBIZyVljs\u000141=zSuNbrBIZyVljs\u000137=49415882\u0001150=0\u000139=0\u0001151=500\u000114=500\u000148=NWDR\u000122=8\u0001453=2\u0001448=NGALL1FX01\u0001447=D\u0001452=76\u0001448=0\u0001447=P\u0001452=3\u00011=test\u000140=A\u000159=0\u000154=B\u000155=ABC\u000138=500\u000144=1000\u000147=500\u000160=20180205-10:38:08.000008\u000110=000\u0001999=500\u0001"
+
+        private const val MSG_NESTED_REQ_COMPONENTS = "8=FIXT.1.19=5935=TEST_149=MZHOT056=INET34=12558=text_140=1151=123410=191"
+        private const val MSG_NESTED_REQ_COMPONENTS_MISSED_REQ = "8=FIXT.1.19=5935=TEST_149=MZHOT056=INET34=12558=text_1151=123410=191"
+        private const val MSG_NESTED_REQ_COMPONENTS_MISSED_OPTIONAL = "8=FIXT.1.19=5935=TEST_149=MZHOT056=INET34=12540=1151=123410=191"
+
+        private const val MSG_NESTED_OPT_COMPONENTS = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=12558=text_140=1151=123410=191"
+        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_REQ = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=12558=text_1151=123410=191"
+        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=125151=123410=191"
+        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS_INNER_AND_OUTER = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=12510=191"
+        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_OUTER_FIELDS_AND_REQ_INNER_FIELD = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=12558=text_110=191"
     }
 }

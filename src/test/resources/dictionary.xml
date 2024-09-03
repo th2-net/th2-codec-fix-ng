@@ -7361,6 +7361,28 @@
             <field name="MinQty" reference="field-MinQty"/>
             <field name="trailer" reference="trailer" required="true"/>
         </message>
+        <message name="NestedRequiredComponentTestMessage">
+            <attribute name="entity_type" type="java.lang.String">Message</attribute>
+            <attribute name="IsAdmin" type="java.lang.Boolean">false</attribute>
+            <attribute name="MessageType" type="java.lang.String">TEST_1</attribute>
+            <field name="OuterComponent" reference="component-OuterComponent" required="true"/>
+        </message>
+        <message name="NestedOptionalComponentTestMessage">
+            <attribute name="entity_type" type="java.lang.String">Message</attribute>
+            <attribute name="IsAdmin" type="java.lang.Boolean">false</attribute>
+            <attribute name="MessageType" type="java.lang.String">TEST_2</attribute>
+            <field name="OuterComponent" reference="component-OuterComponent"/>
+        </message>
+        <message id="component-OuterComponent" name="OuterComponent">
+            <attribute name="entity_type" type="java.lang.String">Component</attribute>
+            <field name="InnerComponent" reference="component-InnerComponent" required="true"/>
+            <field name="LeavesQty" reference="field-LeavesQty" required="true"/>
+        </message>
+        <message id="component-InnerComponent" name="InnerComponent">
+            <attribute name="entity_type" type="java.lang.String">Component</attribute>
+            <field name="Text" reference="field-Text"/>
+            <field name="OrdType" reference="field-OrdType" required="true"/>
+        </message>
         <message id="component-TradingParty" name="TradingParty">
             <attribute name="entity_type" type="java.lang.String">Component</attribute>
             <field name="NoPartyIDs" reference="group-TradingParty_NoPartyIDs" isCollection="true" required="true"/>

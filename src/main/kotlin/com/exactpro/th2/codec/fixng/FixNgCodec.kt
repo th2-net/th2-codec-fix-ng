@@ -250,7 +250,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     private fun validateRequiredTags(requiredTags: Set<Int>, tagsSet: Set<Int>, isDirty: Boolean, context: IReportingContext) {
         for (tag in requiredTags) {
             if (!tagsSet.contains(tag)) {
-                handleError(isDirty, context, "Required tag missing. Tag: ${tag}.")
+                handleError(isDirty, context, "Required tag missing. Tag: $tag.")
             }
         }
     }
@@ -367,7 +367,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                             handleError(isDirty, context, "Wrong date/time value in ${field.primitiveType.name} field '$field.name'. Value: $value.", value)
                         }
                     }
-                    else -> handleError(isDirty, context, "Wrong type value in field ${field.name}. Actual: ${value.javaClass} (value: $value). Expected ${field.primitiveType}")
+                    else -> handleError(isDirty, context, "Wrong type value in field ${field.name}. Actual: ${value.javaClass} (value: $value). Expected ${field.primitiveType}", value)
                 }
 
                 val stringValue = when (valueToEncode) {
@@ -603,16 +603,15 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             return target
         }
 
-        private fun collectConditionallyRequiredTags(fields: Map<String, IFieldStructure>, isParentRequired: Boolean, target: MutableMap<String, Set<Int>>): Map<String, Set<Int>> {
+        private fun collectConditionallyRequiredTags(fields: Map<String, IFieldStructure>, target: MutableMap<String, Set<Int>>): Map<String, Set<Int>> {
             for (field in fields.values) {
                 if (field is IMessageStructure && field.isComponent) {
-                    val isCurrentRequired = isParentRequired && field.isRequired
+                    val isCurrentRequired = field.isRequired
                     // There is no point in adding tags from optional components that contain only one field
                     // (such a field is effectively optional even if it has a required flag).
                     if (!isCurrentRequired && field.fields.size > 1) {
                         target[field.name] = collectRequiredTags(field.fields, mutableSetOf())
                     }
-                    collectConditionallyRequiredTags(field.fields, isCurrentRequired, target)
                 }
             }
             return target
@@ -625,7 +624,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             path = path,
             isRequired = isRequired,
             requiredTags = if (isForEncode) emptySet() else collectRequiredTags(fields, mutableSetOf()),
-            conditionallyRequiredTags = if (isForEncode) emptyMap() else collectConditionallyRequiredTags(fields, true, mutableMapOf())
+            conditionallyRequiredTags = if (isForEncode) emptyMap() else collectConditionallyRequiredTags(fields, mutableMapOf())
         )
 
         private fun getFirstTag(message: IMessageStructure): Int = message.fields.values.first().let {
