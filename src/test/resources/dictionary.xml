@@ -7272,6 +7272,12 @@
             <attribute name="fixtype" type="java.lang.String">NUMINGROUP</attribute>
             <field name="BidDescriptorType" reference="field-BidDescriptorType"/>
         </message>
+        <message name="OuterGroup_NoOrders" id="group-OuterGroup-NoOrders">
+            <attribute name="entity_type" type="java.lang.String">Group</attribute>
+            <attribute name="tag" type="java.lang.Integer">73</attribute>
+            <attribute name="fixtype" type="java.lang.String">NUMINGROUP</attribute>
+            <field name="NestedGroups" reference="component-BidDescReqGrp" isCollection="true"/>
+        </message>
         <message name="NewOrderSingle">
             <attribute name="entity_type" type="java.lang.String">Message</attribute>
             <attribute name="IsAdmin" type="java.lang.Boolean">false</attribute>
@@ -7373,6 +7379,12 @@
             <attribute name="MessageType" type="java.lang.String">TEST_2</attribute>
             <field name="OuterComponent" reference="component-OuterComponent"/>
         </message>
+        <message name="NestedGroupsTestMessage">
+            <attribute name="entity_type" type="java.lang.String">Message</attribute>
+            <attribute name="IsAdmin" type="java.lang.Boolean">false</attribute>
+            <attribute name="MessageType" type="java.lang.String">TEST_3</attribute>
+            <field name="OuterGroup" reference="component-OuterGroup"/>
+        </message>
         <message id="component-OuterComponent" name="OuterComponent">
             <attribute name="entity_type" type="java.lang.String">Component</attribute>
             <field name="InnerComponent" reference="component-InnerComponent" required="true"/>
@@ -7399,6 +7411,10 @@
         <message id="component-BidDescReqGrp" name="BidDescReqGrp">
             <attribute name="entity_type" type="java.lang.String">Component</attribute>
             <field name="NoBidDescriptors" reference="group-BidDescReqGrp_NoBidDescriptors" isCollection="true"/>
+        </message>
+        <message id="component-OuterGroup" name="OuterGroup">
+            <attribute name="entity_type" type="java.lang.String">Component</attribute>
+            <field name="NoOrders" reference="group-OuterGroup-NoOrders" isCollection="true" required="true"/>
         </message>
         <message id="header" name="header">
             <attribute name="entity_type" type="java.lang.String">Header</attribute>

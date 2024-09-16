@@ -372,24 +372,36 @@ class FixNgCodecTest {
         )
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = [true, false])
+    fun `encode nested groups`(isDirty: Boolean) = encodeTest(MSG_NESTED_GROUPS, dirtyMode = isDirty, parsedMessage = parsedMessageWithNestedGroups)
+
+    @ParameterizedTest
+    @ValueSource(booleans = [true, false])
+    fun `decode nested groups`(isDirty: Boolean) = decodeTest(MSG_NESTED_GROUPS, expectedMessage = parsedMessageWithNestedGroups, dirtyMode = isDirty)
+
     private fun encodeTest(
         expectedRawMessage: String,
         expectedError: String? = null,
         dirtyMode: Boolean,
-        encodeFromStringValues: Boolean = false
+        encodeFromStringValues: Boolean = false,
+        parsedMessage: ParsedMessage = this.parsedMessage
     ) {
         if (dirtyMode) {
-            encodeTestDirty(expectedRawMessage, expectedError, encodeFromStringValues)
+            encodeTestDirty(expectedRawMessage, expectedError, parsedMessage, encodeFromStringValues)
         } else {
-            encodeTestNonDirty(expectedRawMessage, expectedError, encodeFromStringValues)
+            encodeTestNonDirty(expectedRawMessage, expectedError, parsedMessage, encodeFromStringValues)
         }
     }
 
     private fun encodeTestDirty(
         expectedRawMessage: String,
         expectedWarning: String? = null,
+        parsedMessage: ParsedMessage,
         encodeFromStringValues: Boolean = false
     ) {
+        val parsedBody = parsedMessage.body as MutableMap<String, Any?>
+
         if (encodeFromStringValues) {
             @Suppress("UNCHECKED_CAST")
             val stringBody = convertValuesToString(parsedBody) as Map<String, Any>
@@ -410,8 +422,11 @@ class FixNgCodecTest {
     private fun encodeTestNonDirty(
         expectedRawMessage: String,
         expectedError: String? = null,
+        parsedMessage: ParsedMessage,
         encodeFromStringValues: Boolean = false
     ) {
+        val parsedBody = parsedMessage.body as MutableMap<String, Any?>
+
         if (encodeFromStringValues) {
             @Suppress("UNCHECKED_CAST")
             val stringBody = convertValuesToString(parsedBody) as Map<String, Any>
@@ -645,6 +660,49 @@ class FixNgCodecTest {
     )
     private val parsedBodyWithNestedComponents: MutableMap<String, Any?> = parsedMessageWithNestedComponents.body as MutableMap
 
+    private val parsedMessageWithNestedGroups = ParsedMessage(
+        MessageId("test_alias", Direction.OUTGOING, 0L, Instant.now(), emptyList()),
+        EventId("test_id", "test_book", "test_scope", Instant.now()),
+        "NestedGroupsTestMessage",
+        mutableMapOf("encode-mode" to "dirty"),
+        PROTOCOL,
+        mutableMapOf(
+            "header" to mutableMapOf(
+                "BeginString" to "FIXT.1.1",
+                "BodyLength" to 88,
+                "MsgType" to "TEST_3",
+                "MsgSeqNum" to 125,
+                "TargetCompID" to "INET",
+                "SenderCompID" to "MZHOT0"
+            ),
+            "OuterGroup" to mutableMapOf(
+                "NoOrders" to mutableListOf(
+                    mutableMapOf(
+                        "NestedGroups" to mutableMapOf(
+                            "NoBidDescriptors" to mutableListOf(
+                                mutableMapOf("BidDescriptorType" to 1),
+                                mutableMapOf("BidDescriptorType" to 2),
+                                mutableMapOf("BidDescriptorType" to 3)
+                            )
+                        )
+                    ),
+                    mutableMapOf(
+                        "NestedGroups" to mutableMapOf(
+                            "NoBidDescriptors" to mutableListOf(
+                                mutableMapOf("BidDescriptorType" to 3),
+                                mutableMapOf("BidDescriptorType" to 2),
+                                mutableMapOf("BidDescriptorType" to 1)
+                            )
+                        )
+                    )
+                )
+            ),
+            "trailer" to mapOf(
+                "CheckSum" to "211"
+            )
+        )
+    )
+
     companion object {
         private const val DIRTY_MODE_WARNING_PREFIX = "Dirty mode WARNING: "
 
@@ -672,5 +730,7 @@ class FixNgCodecTest {
         private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=125151=123410=191"
         private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS_INNER_AND_OUTER = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=12510=191"
         private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_OUTER_FIELDS_AND_REQ_INNER_FIELD = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=12558=text_110=191"
+
+        private const val MSG_NESTED_GROUPS = "8=FIXT.1.19=8835=TEST_349=MZHOT056=INET34=12573=2398=3399=1399=2399=3398=3399=3399=2399=110=211"
     }
 }
