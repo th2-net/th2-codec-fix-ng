@@ -46,6 +46,12 @@ Component benchmark results available [here](docs/benchmarks/jmh-benchmark.md).
   + Dirty mode added. 
   + `dirtyMode` setting option added.
   + `decodeValuesToStrings` setting option added.
+  + JMH benchmarks added
+  + Migrate to th2 gradle plugin `0.1.2` (th2-bom:4.7.0)
+  + Updated th2-common: `5.11.0-dev`
+  + Updated th2-codec: `5.5.0-dev`
+  + Updated sailfish: `3.3.241`
+  + Workflows updated
 
 ### 0.0.1
   + Initial release
