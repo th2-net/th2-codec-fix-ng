@@ -38,6 +38,9 @@ default value: `true`. If `true`, decodes all values to strings instead of typed
 #### decodeComponentsToNestedMaps
 default value: `true`. If `true`, decodes `components` to nested maps instead of unwrap component's map to message's main map.
 
+## Performance
+Component benchmark results available [here](docs/benchmarks/jmh-benchmark.md).
+
 ## Release notes
 ### 0.1.0
   + Dirty mode added. 
