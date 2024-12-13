@@ -1,4 +1,4 @@
-# th2-codec-fix-ng 0.1.0
+# th2-codec-fix-ng 0.1.1
 
 This codec can be used in dirty mode for decoding and encoding messages via the FIX protocol.
 
@@ -14,7 +14,8 @@ Configuration example.
 ```yaml
 beginString: FIXT.1.1
 dictionary: fix_dictionary.xml
-charset: US_ASCII
+charset: US-ASCII
+decodeDelimiter: \u0001
 dirtyMode: false
 decodeValuesToStrings: true
 decodeComponentsToNestedMaps: true
@@ -27,7 +28,10 @@ default value: `FIXT.1.1`. Value to put into the `BeginString` field (tag: 8) wh
 required value. XML file containing the FIX dictionary.
 
 #### charset
-default value: `US_ASCII`. Charset for reading and writing FIX fields.
+default value: `US-ASCII`. Charset for reading and writing FIX fields.
+
+#### decodeDelimiter
+default value: `\u0001`. Delimiter character from `US-ASCII` charset.
 
 #### dirtyMode
 default value: `false`. If `true`, processes all messages in dirty mode (generates warnings on invalid messages and continues processing). If `false`, only messages that contain the `encode-mode: dirty` property will be processed in dirty mode.
@@ -42,12 +46,17 @@ default value: `true`. If `true`, decodes `components` to nested maps instead of
 Component benchmark results available [here](docs/benchmarks/jmh-benchmark.md).
 
 ## Release notes
+
+### 0.1.1
+  + `decodeDelimiter` setting option added.
+  + Updated th2 gradle plugin `0.1.6` (th2-bom: `4.9.0`)
+
 ### 0.1.0
   + Dirty mode added. 
   + `dirtyMode` setting option added.
   + `decodeValuesToStrings` setting option added.
   + JMH benchmarks added
-  + Migrate to th2 gradle plugin `0.1.2` (th2-bom:4.7.0)
+  + Migrate to th2 gradle plugin `0.1.2` (th2-bom: `4.7.0`)
   + Updated th2-common: `5.11.0-dev`
   + Updated th2-codec: `5.5.0-dev`
   + Updated sailfish: `3.3.241`

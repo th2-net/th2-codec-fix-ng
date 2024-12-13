@@ -17,13 +17,24 @@
 package com.exactpro.th2.codec.fixng
 
 import com.exactpro.th2.codec.api.IPipelineCodecSettings
+import com.exactpro.th2.codec.fixng.FixNgCodec.Companion.SOH_CHAR
+import com.fasterxml.jackson.core.JsonParser
+import com.fasterxml.jackson.databind.DeserializationContext
+import com.fasterxml.jackson.databind.JsonDeserializer
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import java.nio.charset.Charset
 
 data class FixNgCodecSettings(
     val beginString: String = "FIXT.1.1",
     val dictionary: String,
+    @JsonDeserialize(using = CharsetDeserializer::class)
     val charset: Charset = Charsets.US_ASCII,
+    val decodeDelimiter: Char = SOH_CHAR,
     val dirtyMode: Boolean = false,
     val decodeValuesToStrings: Boolean = true,
     val decodeComponentsToNestedMaps: Boolean = true
 ) : IPipelineCodecSettings
+
+object CharsetDeserializer : JsonDeserializer<Charset>() {
+    override fun deserialize(p: JsonParser, ctxt: DeserializationContext): Charset = Charset.forName(p.valueAsString)
+}
