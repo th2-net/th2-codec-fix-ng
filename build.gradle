@@ -74,7 +74,7 @@ repositories {
 
 dependencies {
     implementation "com.exactpro.th2:common:$commonVersion"
-    implementation "com.exactpro.th2:codec:5.5.0-dev"
+    implementation "com.exactpro.th2:codec:5.6.0-th2-gradle-plugin-0.1.1-10038884311-85c9dab-SNAPSHOT"
 
     implementation ("com.exactpro.sf:sailfish-common:$sailfishVersion") {
         exclude group: "commons-configuration", module: "commons-configuration" // because of the vulnerability
