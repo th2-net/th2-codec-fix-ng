@@ -7,7 +7,7 @@ plugins {
 }
 
 ext {
-    sailfishVersion = '3.3.241'
+    sailfishVersion = '3.4.260'
     commonVersion = '5.14.0-dev'
     jmhVersion = '1.37'
 }
