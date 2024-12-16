@@ -8,7 +8,7 @@ plugins {
 
 ext {
     sailfishVersion = '3.4.260'
-    commonVersion = '5.14.0-dev'
+    commonVersion = '5.15.0-windows-compatible-11379366273-569bd5b-SNAPSHOT'
     jmhVersion = '1.37'
 }
 
