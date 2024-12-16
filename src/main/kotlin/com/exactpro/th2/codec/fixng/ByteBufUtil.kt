@@ -20,7 +20,6 @@ import io.netty.buffer.ByteBuf
 import java.nio.charset.Charset
 
 private const val SEP_BYTE = '='.code.toByte()
-private const val SOH_BYTE = 1.toByte()
 private const val DIGIT_0 = '0'.code.toByte()
 private const val DIGIT_9 = '9'.code.toByte()
 
@@ -73,45 +72,48 @@ fun ByteBuf.writeTag(tag: Int): ByteBuf {
     return printInt(tag).writeByte(SEP_BYTE.toInt())
 }
 
-fun ByteBuf.readValue(charset: Charset, isDirty: Boolean): String {
+fun ByteBuf.readValue(delimiter: Byte, charset: Charset, isDirty: Boolean): String {
     val offset = readerIndex()
-    val length = bytesBefore(SOH_BYTE)
+    val length = bytesBefore(delimiter)
     check(isDirty || length > 0) { "No valid value at offset: $offset" }
     readerIndex(offset + length + 1)
     return toString(offset, length, charset)
 }
 
-fun ByteBuf.writeValue(value: String, charset: Charset): ByteBuf = apply {
+fun ByteBuf.writeValue(value: String, delimiter: Byte, charset: Charset): ByteBuf = apply {
     writeCharSequence(value, charset)
-    writeByte(SOH_BYTE.toInt())
+    writeByte(delimiter.toInt())
 }
 
 inline fun ByteBuf.forEachField(
+    delimiter: Byte,
     charset: Charset,
     isDirty: Boolean,
     action: (tag: Int, value: String) -> Boolean,
 ) {
     while (isReadable) {
         val offset = readerIndex()
-        if (action(readTag(), readValue(charset, isDirty))) continue
+        if (action(readTag(), readValue(delimiter, charset, isDirty))) continue
         readerIndex(offset)
         break
     }
 }
 
-inline fun ByteBuf.readField(tag: Int, charset: Charset, isDirty: Boolean, message: (Int) -> String): String = readTag().let {
+inline fun ByteBuf.readField(tag: Int, delimiter: Byte, charset: Charset, isDirty: Boolean, message: (Int) -> String): String = readTag().let {
     check(it == tag) { message(it) }
-    readValue(charset, isDirty)
+    readValue(delimiter, charset, isDirty)
 }
 
-fun ByteBuf.writeField(tag: Int, value: String, charset: Charset): ByteBuf = writeTag(tag).writeValue(value, charset)
+fun ByteBuf.writeField(tag: Int, value: String, delimiter: Byte, charset: Charset): ByteBuf =
+    writeTag(tag).writeValue(value, delimiter, charset)
 
-fun ByteBuf.writeField(tag: Int, value: Any?, charset: Charset): ByteBuf = writeField(tag, value.toString(), charset)
+fun ByteBuf.writeField(tag: Int, value: Any?, delimiter: Byte, charset: Charset): ByteBuf =
+    writeField(tag, value.toString(), delimiter, charset)
 
-fun ByteBuf.writeChecksum() {
+fun ByteBuf.writeChecksum(delimiter: Byte) {
     val index = readerIndex()
     var checksum = 0
     while (isReadable) checksum += readByte()
     readerIndex(index)
-    writeTag(10).printInt(checksum % 256, 3).writeByte(SOH_BYTE.toInt())
+    writeTag(10).printInt(checksum % 256, 3).writeByte(delimiter.toInt())
 }

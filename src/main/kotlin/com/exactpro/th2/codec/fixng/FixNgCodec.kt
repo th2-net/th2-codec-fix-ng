@@ -48,6 +48,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     private val isDirtyMode = settings.dirtyMode
     private val isDecodeToStrings = settings.decodeValuesToStrings
     private val isDecodeComponentsToNestedMaps = settings.decodeComponentsToNestedMaps
+    private val decodeDelimiter: Byte = settings.decodeDelimiter.also {
+        check(it.isPureAscii()) { "Tag delimiter '$it' isn't part of ${Charsets.US_ASCII} charset" }
+    }.code.toByte()
 
     private val fieldsEncode = convertToFieldsByName(dictionary.fields, true, emptyList(), true)
     private val fieldsDecode = convertToFieldsByTag(dictionary.fields, emptyList())
@@ -89,16 +92,16 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             val body = Unpooled.buffer(1024)
             val prefix = Unpooled.buffer(32)
 
-            prefix.writeField(TAG_BEGIN_STRING, beginString, charset)
-            body.writeField(TAG_MSG_TYPE, messageDef.type, charset)
+            prefix.writeField(TAG_BEGIN_STRING, beginString, SOH_BYTE, charset)
+            body.writeField(TAG_MSG_TYPE, messageDef.type, SOH_BYTE, charset)
 
             headerDef.encode(headerFields, body, isDirty, fieldsEncode, context)
             messageDef.encode(messageFields, body, isDirty, fieldsEncode, context, FIELDS_NOT_IN_BODY)
             trailerDef.encode(trailerFields, body, isDirty, fieldsEncode, context)
 
-            prefix.writeField(TAG_BODY_LENGTH, body.readableBytes(), charset)
+            prefix.writeField(TAG_BODY_LENGTH, body.readableBytes(), SOH_BYTE, charset)
             val buffer = Unpooled.wrappedBuffer(prefix, body)
-            buffer.writeChecksum()
+            buffer.writeChecksum(SOH_BYTE)
 
             messages += RawMessage(
                 id = message.id,
@@ -124,10 +127,16 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             val isDirty = isDirtyMode || (message.metadata[ENCODE_MODE_PROPERTY_NAME] == DIRTY_ENCODE_MODE)
             val buffer = message.body
 
-            val beginString = buffer.readField(TAG_BEGIN_STRING, charset, isDirty) { "Message starts with $it tag instead of BeginString ($TAG_BEGIN_STRING)" }
-            val bodyLengthString = buffer.readField(TAG_BODY_LENGTH, charset, isDirty) { "BeginString ($TAG_BEGIN_STRING) is followed by $it tag instead of BodyLength ($TAG_BODY_LENGTH)" }
+            val beginString = buffer.readField(TAG_BEGIN_STRING, decodeDelimiter, charset, isDirty) {
+                "Message starts with $it tag instead of BeginString ($TAG_BEGIN_STRING)"
+            }
+            val bodyLengthString = buffer.readField(TAG_BODY_LENGTH, decodeDelimiter, charset, isDirty) {
+                "BeginString ($TAG_BEGIN_STRING) is followed by $it tag instead of BodyLength ($TAG_BODY_LENGTH)"
+            }
             val bodyLength = bodyLengthString.toIntOrNull() ?: handleError(isDirty, context, "Wrong number value in integer field 'BodyLength'. Value: $bodyLengthString.", bodyLengthString)
-            val msgType = buffer.readField(TAG_MSG_TYPE, charset, isDirty) { "BodyLength ($TAG_BODY_LENGTH) is followed by $it tag instead of MsgType ($TAG_MSG_TYPE)" }
+            val msgType = buffer.readField(TAG_MSG_TYPE, decodeDelimiter, charset, isDirty) {
+                "BodyLength ($TAG_BODY_LENGTH) is followed by $it tag instead of MsgType ($TAG_MSG_TYPE)"
+            }
             val messageDef = messagesByTypeForDecode[msgType] ?: error("Unknown message type: $msgType")
 
             val header = headerDef.decode(buffer, messageDef, isDirty, fieldsDecode, context)
@@ -207,13 +216,13 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         targetMap[name] = decodedValue
     }
 
-    private val prereadHeaderTags = arrayOf(8 /* BeginString */, 9 /* BodyLength */, 35 /* MsgType */)
+    private val preparedHeaderTags = arrayOf(8 /* BeginString */, 9 /* BodyLength */, 35 /* MsgType */)
 
     private fun Message.decode(source: ByteBuf, bodyDef: Message, isDirty: Boolean, dictionaryFields: Map<Int, Field>, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
-        val tagsSet: MutableSet<Int> = hashSetOf(*prereadHeaderTags)
+        val tagsSet: MutableSet<Int> = hashSetOf(*preparedHeaderTags)
         val usedComponents = mutableSetOf<String>()
 
-        source.forEachField(charset, isDirty) { tag, value ->
+        source.forEachField(decodeDelimiter, charset, isDirty) { tag, value ->
             val field = get(tag) ?: if (isDirty) {
                 when (this) {
                     headerDef -> bodyDef[tag] ?: trailerDef[tag]
@@ -291,9 +300,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
                 else -> error("Unsupported type: $primitiveType.")
             }
-        } catch (e: NumberFormatException) {
+        } catch (_: NumberFormatException) {
             handleError(isDirty, context, "Wrong number value in ${primitiveType.name} field '$name'. Value: $value.", value)
-        } catch (e: DateTimeParseException) {
+        } catch (_: DateTimeParseException) {
             handleError(isDirty, context, "Wrong date/time value in ${primitiveType.name} field '$name'. Value: $value.", value)
         }
 
@@ -312,7 +321,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         var map: MutableMap<String, Any>? = null
         val tags: MutableSet<Int> = hashSetOf()
 
-        source.forEachField(charset, isDirty) { tag, value ->
+        source.forEachField(decodeDelimiter, charset, isDirty) { tag, value ->
             val field = get(tag) ?: return@forEachField false
 
             val group = if (tag == delimiter || tags.contains(tag) || map == null) {
@@ -359,11 +368,11 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                                     // we reuse decode() method for the types that have the same string representation
                                     // of values in FIX protocol and in TH2 transport protocol
                                     field.decode(value, isDirty, context) // validate if String value could be parsed to required type
-                                    target.writeField(field.tag, value, charset)
+                                    target.writeField(field.tag, value, SOH_BYTE, charset)
                                     return
                                 }
                             }
-                        } catch (e: DateTimeParseException) {
+                        } catch (_: DateTimeParseException) {
                             handleError(isDirty, context, "Wrong date/time value in ${field.primitiveType.name} field '$field.name'. Value: $value.", value)
                         }
                     }
@@ -384,7 +393,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                     field.values.isNotEmpty() && !field.values.contains(stringValue) -> handleError(isDirty, context, "Invalid value in enum field ${field.name}. Actual: $value. Valid values ${field.values}.")
                 }
 
-                target.writeField(field.tag, stringValue, charset)
+                target.writeField(field.tag, stringValue, SOH_BYTE, charset)
             }
 
             field is Group && value is List<*> -> field.encode(value, target, isDirty, dictionaryFields, context)
@@ -425,7 +434,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                         error("List value with unspecified name. tag = $tag")
                     } else {
                         context.warning(DIRTY_MODE_WARNING_PREFIX + "Tag instead of field name. Field name: $fieldName. Field value: $value. Message body: $source")
-                        target.writeField(tag, value, charset)
+                        target.writeField(tag, value, SOH_BYTE, charset)
                     }
                 } else {
                     error("Field does not exist in dictionary. Field name: $fieldName. Field value: $value. Message body: $source")
@@ -435,7 +444,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     }
 
     private fun Group.encode(source: List<*>, target: ByteBuf, isDirty: Boolean, dictionaryFields: Map<String, Field>, context: IReportingContext) {
-        target.writeField(counter, source.size, charset)
+        target.writeField(counter, source.size, SOH_BYTE, charset)
 
         source.forEach { group ->
             check(group is Map<*, *>) { "Unsupported value in $name group: $group" }
@@ -498,6 +507,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     ) : Field, FieldMap()
 
     companion object {
+        const val SOH_CHAR = ''
+        private const val SOH_BYTE = SOH_CHAR.code.toByte()
+
         private const val HEADER = "header"
         private const val TRAILER = "trailer"
         private val FIELDS_NOT_IN_BODY = setOf(HEADER, TRAILER)
