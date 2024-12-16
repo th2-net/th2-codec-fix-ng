@@ -19,18 +19,17 @@ package com.exactpro.th2.codec.fixng
 import com.exactpro.sf.common.messages.structures.IDictionaryStructure
 import com.exactpro.sf.common.messages.structures.loaders.XmlDictionaryStructureLoader
 import com.exactpro.th2.codec.api.IReportingContext
-import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.RawMessage
-import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.ParsedMessage
+import com.exactpro.th2.codec.fixng.FixNgCodecFactory.Companion.PROTOCOL
+import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.Direction
+import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.EventId
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.MessageGroup
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.MessageId
-import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.EventId
-import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.Direction
-import com.exactpro.th2.codec.fixng.FixNgCodecFactory.Companion.PROTOCOL
+import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.ParsedMessage
+import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.RawMessage
 import io.netty.buffer.CompositeByteBuf
 import io.netty.buffer.Unpooled
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
@@ -44,8 +43,6 @@ class FixNgCodecTest {
     private val dictionary: IDictionaryStructure = FixNgCodecTest::class.java.classLoader
         .getResourceAsStream("dictionary.xml")
         .use(XmlDictionaryStructureLoader()::load)
-
-    private val codec = createCodec()
 
     private val reportingContext = object : IReportingContext {
         private val _warnings: MutableList<String> = ArrayList()
@@ -63,13 +60,13 @@ class FixNgCodecTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `simple encode`(isDirty: Boolean) = encodeTest(MSG_CORRECT, dirtyMode = isDirty)
+    @MethodSource("configs")
+    fun `simple encode`(isDirty: Boolean, delimiter: Char) = encodeTest(MSG_CORRECT, isDirty, delimiter)
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `simple encode from string values`(isDirty: Boolean) =
-        encodeTest(MSG_CORRECT, dirtyMode = isDirty, encodeFromStringValues = true)
+    @MethodSource("configs")
+    fun `simple encode from string values`(isDirty: Boolean, delimiter: Char) =
+        encodeTest(MSG_CORRECT, isDirty, delimiter, encodeFromStringValues = true)
 
     @ParameterizedTest
     @MethodSource("configs")
@@ -92,10 +89,15 @@ class FixNgCodecTest {
         )
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `encode with addition field that exists in dictionary`(isDirty: Boolean) {
+    @MethodSource("configs")
+    fun `encode with addition field that exists in dictionary`(isDirty: Boolean, delimiter: Char) {
         parsedBody["CFICode"] = "12345"
-        encodeTest(MSG_ADDITIONAL_FIELD_DICT, "Unexpected field in message. Field name: CFICode. Field value: 12345.", dirtyMode = isDirty)
+        encodeTest(
+            MSG_ADDITIONAL_FIELD_DICT,
+            isDirty,
+            delimiter,
+            "Unexpected field in message. Field name: CFICode. Field value: 12345."
+        )
     }
 
     @ParameterizedTest
@@ -160,23 +162,34 @@ class FixNgCodecTest {
         )
     }
 
-    @Test
-    fun `encode with addition field that contain tag instead of name (dirty)`() {
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `encode with addition field that contain tag instead of name (dirty)`(delimiter: Char) {
         parsedBody["9999"] = "12345" // field doesn't exist in dictionary
-        encodeTest(MSG_ADDITIONAL_FIELD_TAG, "Tag instead of field name. Field name: 9999. Field value: 12345.", dirtyMode = true)
-    }
-
-    @Test
-    fun `encode with addition field that contain tag instead of name (non dirty)`() {
-        parsedBody["9999"] = "12345" // field doesn't exist in dictionary
-        encodeTest(MSG_ADDITIONAL_FIELD_TAG, "Unexpected field in message. Field name: 9999. Field value: 12345.", dirtyMode = false)
+        encodeTest(
+            MSG_ADDITIONAL_FIELD_TAG,
+            dirtyMode = true,
+            delimiter,
+            "Tag instead of field name. Field name: 9999. Field value: 12345."
+        )
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `encode with required field removed`(isDirty: Boolean) {
+    @ValueSource(chars = ['', '|'])
+    fun `encode with addition field that contain tag instead of name (non dirty)`(delimiter: Char) {
+        parsedBody["9999"] = "12345" // field doesn't exist in dictionary
+        encodeTest(
+            MSG_ADDITIONAL_FIELD_TAG,
+            dirtyMode = false, delimiter,
+            "Unexpected field in message. Field name: 9999. Field value: 12345."
+        )
+    }
+
+    @ParameterizedTest
+    @MethodSource("configs")
+    fun `encode with required field removed`(isDirty: Boolean, delimiter: Char) {
         parsedBody.remove("ExecID")
-        encodeTest(MSG_REQUIRED_FIELD_REMOVED, "Required field missing. Field name: ExecID.", dirtyMode = isDirty)
+        encodeTest(MSG_REQUIRED_FIELD_REMOVED, isDirty, delimiter, "Required field missing. Field name: ExecID.")
     }
 
     @ParameterizedTest
@@ -192,11 +205,16 @@ class FixNgCodecTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `encode with required delimiter field in group removed in first entry`(isDirty: Boolean) {
+    @MethodSource("configs")
+    fun `encode with required delimiter field in group removed in first entry`(isDirty: Boolean, delimiter: Char) {
         @Suppress("UNCHECKED_CAST")
         ((parsedBody["TradingParty"] as Map<String, Any>)["NoPartyIDs"] as List<MutableMap<String, Any>>)[0].remove("PartyID")
-        encodeTest(MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_FIRST_ENTRY, "Required field missing. Field name: PartyID.", dirtyMode = isDirty)
+        encodeTest(
+            MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_FIRST_ENTRY,
+            isDirty,
+            delimiter,
+            "Required field missing. Field name: PartyID."
+        )
     }
 
     @ParameterizedTest
@@ -213,11 +231,16 @@ class FixNgCodecTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `encode with required delimiter field in group removed in second entry`(isDirty: Boolean) {
+    @MethodSource("configs")
+    fun `encode with required delimiter field in group removed in second entry`(isDirty: Boolean, delimiter: Char) {
         @Suppress("UNCHECKED_CAST")
         ((parsedBody["TradingParty"] as Map<String, Any>)["NoPartyIDs"] as List<MutableMap<String, Any>>)[1].remove("PartyID")
-        encodeTest(MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_SECOND_ENTRY, "Required field missing. Field name: PartyID.", dirtyMode = isDirty)
+        encodeTest(
+            MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_SECOND_ENTRY,
+            isDirty,
+            delimiter,
+            "Required field missing. Field name: PartyID."
+        )
     }
 
     @ParameterizedTest
@@ -234,10 +257,10 @@ class FixNgCodecTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `encode with wrong enum value`(isDirty: Boolean) {
+    @MethodSource("configs")
+    fun `encode with wrong enum value`(isDirty: Boolean, delimiter: Char) {
         parsedBody["ExecType"] = 'X'
-        encodeTest(MSG_WRONG_ENUM, "Invalid value in enum field ExecType. Actual: X.", dirtyMode = isDirty)
+        encodeTest(MSG_WRONG_ENUM, isDirty, delimiter, "Invalid value in enum field ExecType. Actual: X.")
     }
 
     @ParameterizedTest
@@ -253,24 +276,29 @@ class FixNgCodecTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `encode with correct enum value as string`(isDirty: Boolean) {
+    @MethodSource("configs")
+    fun `encode with correct enum value as string`(isDirty: Boolean, delimiter: Char) {
         parsedBody["ExecType"] = "0"
-        encodeTest(MSG_CORRECT, dirtyMode = isDirty)
+        encodeTest(MSG_CORRECT, isDirty, delimiter)
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `encode with wrong value type`(isDirty: Boolean) {
+    @MethodSource("configs")
+    fun `encode with wrong value type`(isDirty: Boolean, delimiter: Char) {
         parsedBody["LeavesQty"] = "Five" // String instead of BigDecimal
-        encodeTest(MSG_WRONG_TYPE, "Wrong number value in java.math.BigDecimal field 'LeavesQty'. Value: Five.", dirtyMode = isDirty)
+        encodeTest(
+            MSG_WRONG_TYPE,
+            isDirty,
+            delimiter,
+            "Wrong number value in java.math.BigDecimal field 'LeavesQty'. Value: Five."
+        )
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `encode with correct BigDecimal value in string`(isDirty: Boolean) {
+    @MethodSource("configs")
+    fun `encode with correct BigDecimal value in string`(isDirty: Boolean, delimiter: Char) {
         parsedBody["LeavesQty"] = "500" // String instead of BigDecimal
-        encodeTest(MSG_CORRECT, dirtyMode = isDirty)
+        encodeTest(MSG_CORRECT, isDirty, delimiter)
     }
 
     @ParameterizedTest
@@ -286,10 +314,10 @@ class FixNgCodecTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `encode with empty value`(isDirty: Boolean) {
+    @MethodSource("configs")
+    fun `encode with empty value`(isDirty: Boolean, delimiter: Char) {
         parsedBody["Account"] = ""
-        encodeTest(MSG_EMPTY_VAL, "Empty value in the field 'Account'.", dirtyMode = isDirty)
+        encodeTest(MSG_EMPTY_VAL, isDirty, delimiter, "Empty value in the field 'Account'.")
     }
 
     @ParameterizedTest
@@ -307,10 +335,15 @@ class FixNgCodecTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `encode with non printable characters`(isDirty: Boolean) {
+    @MethodSource("configs")
+    fun `encode with non printable characters`(isDirty: Boolean, delimiter: Char) {
         parsedBody["Account"] = "test\taccount"
-        encodeTest(MSG_NON_PRINTABLE, "Non-printable characters in the field 'Account'. Value: test\taccount", dirtyMode = isDirty)
+        encodeTest(
+            MSG_NON_PRINTABLE,
+            isDirty,
+            delimiter,
+            "Non-printable characters in the field 'Account'. Value: test\taccount"
+        )
     }
 
     @ParameterizedTest
@@ -326,8 +359,8 @@ class FixNgCodecTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `encode with calculated required fields removed`(isDirty: Boolean) {
+    @MethodSource("configs")
+    fun `encode with calculated required fields removed`(isDirty: Boolean, delimiter: Char) {
         @Suppress("UNCHECKED_CAST")
         val header = parsedBody["header"] as MutableMap<String, Any>
         header.remove("BeginString")
@@ -335,19 +368,19 @@ class FixNgCodecTest {
         header.remove("MsgType")
         @Suppress("UNCHECKED_CAST")
         (parsedBody["trailer"] as MutableMap<String, Any>).remove("CheckSum")
-        encodeTest(MSG_CORRECT, dirtyMode = isDirty)
+        encodeTest(MSG_CORRECT, isDirty, delimiter)
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `encode with calculated required header fields removed`(isDirty: Boolean) {
+    @MethodSource("configs")
+    fun `encode with calculated required header fields removed`(isDirty: Boolean, delimiter: Char) {
         @Suppress("UNCHECKED_CAST")
         val header = parsedBody["header"] as MutableMap<String, Any>
         header.remove("SenderCompID")
         header.remove("TargetCompID")
         header.remove("MsgSeqNum")
         header.remove("SendingTime")
-        encodeTest(MSG_REQUIRED_HEADER_REMOVED, dirtyMode = isDirty)
+        encodeTest(MSG_REQUIRED_HEADER_REMOVED, isDirty, delimiter)
     }
 
     @ParameterizedTest
@@ -484,8 +517,13 @@ class FixNgCodecTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = [true, false])
-    fun `encode nested groups`(isDirty: Boolean) = encodeTest(MSG_NESTED_GROUPS, dirtyMode = isDirty, parsedMessage = parsedMessageWithNestedGroups)
+    @MethodSource("configs")
+    fun `encode nested groups`(isDirty: Boolean, delimiter: Char) = encodeTest(
+        MSG_NESTED_GROUPS,
+        isDirty,
+        delimiter,
+        parsedMessage = parsedMessageWithNestedGroups
+    )
 
     @ParameterizedTest
     @MethodSource("configs")
@@ -506,22 +544,24 @@ class FixNgCodecTest {
 
     private fun encodeTest(
         expectedRawMessage: String,
-        expectedError: String? = null,
         dirtyMode: Boolean,
+        delimiter: Char,
+        expectedError: String? = null,
         encodeFromStringValues: Boolean = false,
         parsedMessage: ParsedMessage = this.parsedMessage
     ) {
         if (dirtyMode) {
-            encodeTestDirty(expectedRawMessage, expectedError, parsedMessage, encodeFromStringValues)
+            encodeTestDirty(expectedRawMessage, parsedMessage, delimiter, expectedError, encodeFromStringValues)
         } else {
-            encodeTestNonDirty(expectedRawMessage, expectedError, parsedMessage, encodeFromStringValues)
+            encodeTestNonDirty(expectedRawMessage, parsedMessage, delimiter, expectedError, encodeFromStringValues)
         }
     }
 
     private fun encodeTestDirty(
         expectedRawMessage: String,
-        expectedWarning: String? = null,
         parsedMessage: ParsedMessage,
+        delimiter: Char,
+        expectedWarning: String? = null,
         encodeFromStringValues: Boolean = false
     ) {
         val parsedBody = parsedMessage.body as MutableMap<String, Any?>
@@ -532,7 +572,7 @@ class FixNgCodecTest {
             parsedBody.putAll(stringBody)
         }
 
-        val encoded = codec.encode(MessageGroup(listOf(parsedMessage)), reportingContext)
+        val encoded = createCodec(delimiter = delimiter).encode(MessageGroup(listOf(parsedMessage)), reportingContext)
         val body = encoded.messages.single().body as CompositeByteBuf
         val fixMsg = body.toString(StandardCharsets.US_ASCII)
         assertThat(fixMsg).isEqualTo(expectedRawMessage)
@@ -545,8 +585,9 @@ class FixNgCodecTest {
 
     private fun encodeTestNonDirty(
         expectedRawMessage: String,
-        expectedError: String? = null,
         parsedMessage: ParsedMessage,
+        delimiter: Char,
+        expectedError: String? = null,
         encodeFromStringValues: Boolean = false
     ) {
         val parsedBody = parsedMessage.body as MutableMap<String, Any?>
@@ -561,12 +602,12 @@ class FixNgCodecTest {
 
         if (expectedError != null) {
             assertThatThrownBy {
-                codec.encode(MessageGroup(listOf(parsed)), reportingContext)
+                createCodec(delimiter = delimiter).encode(MessageGroup(listOf(parsed)), reportingContext)
                 println()
             }.isInstanceOf(IllegalStateException::class.java).message()
                 .startsWith(expectedError)
         } else {
-            val encoded = codec.encode(MessageGroup(listOf(parsed)), reportingContext)
+            val encoded = createCodec(delimiter = delimiter).encode(MessageGroup(listOf(parsed)), reportingContext)
 
             val body = encoded.messages.single().body as CompositeByteBuf
             val fixMsg = body.toString(StandardCharsets.US_ASCII)
