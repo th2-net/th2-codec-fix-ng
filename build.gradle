@@ -95,7 +95,7 @@ dependencies {
     jmh "org.openjdk.jmh:jmh-generator-annprocess:$jmhVersion"
     jmh "org.openjdk.jmh:jmh-generator-bytecode:$jmhVersion"
 
-    testImplementation "org.junit.jupiter:junit-jupiter:5.11.3"
+    testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
     testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
     testImplementation "org.assertj:assertj-core:3.26.3"
 }
