@@ -534,6 +534,15 @@ class FixNgCodecTest {
         expectedMessage = parsedMessageWithNestedGroups
     )
 
+    @ParameterizedTest
+    @MethodSource("configs")
+    fun `encode time zone`(isDirty: Boolean, delimiter: Char) = encodeTest(
+        MSG_TIME_ZONE,
+        isDirty,
+        delimiter,
+        parsedMessage = parsedMessageWithTimezone
+    )
+
     private fun createCodec(delimiter: Char = '', decodeValuesToStrings: Boolean = false): FixNgCodec {
         return FixNgCodec(dictionary, FixNgCodecSettings(
             dictionary = "",
@@ -873,6 +882,31 @@ class FixNgCodecTest {
         )
     )
 
+    private val parsedMessageWithTimezone = ParsedMessage(
+        MessageId("test_alias", Direction.OUTGOING, 0L, Instant.now(), emptyList()),
+        EventId("test_id", "test_book", "test_scope", Instant.now()),
+        "TimeZoneTestMessage",
+        mutableMapOf("encode-mode" to "dirty"),
+        PROTOCOL,
+        mutableMapOf(
+            "header" to mutableMapOf(
+                "MsgSeqNum" to 10947,
+                "SenderCompID" to "SENDER",
+                "SendingTime" to "2023-04-19T10:36:07.415088Z",
+                "TargetCompID" to "RECEIVER",
+                "BeginString" to "FIXT.1.1",
+                "BodyLength" to 295,
+                "MsgType" to "TEST_4"
+            ),
+            "TransactTime" to "2018-02-05T10:38:08.000008Z",
+            "TotalVolumeTradedDate" to "2018-02-05Z",
+            "TotalVolumeTradedTime" to "10:38:08.000008Z",
+            "trailer" to mutableMapOf(
+                "CheckSum" to "122"
+            )
+        )
+    )
+
     companion object {
         private const val DIRTY_MODE_WARNING_PREFIX = "Dirty mode WARNING: "
 
@@ -902,6 +936,7 @@ class FixNgCodecTest {
         private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_OUTER_FIELDS_AND_REQ_INNER_FIELD = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=12558=text_110=191"
 
         private const val MSG_NESTED_GROUPS = "8=FIXT.1.19=8835=TEST_349=MZHOT056=INET34=12573=2398=3399=1399=2399=3398=3399=3399=2399=110=211"
+        private const val MSG_TIME_ZONE = "8=FIXT.1.19=12335=TEST_449=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508860=20180205-10:38:08.000008449=20180205450=10:38:0810=206"
 
         @JvmStatic
         fun configs() = listOf(

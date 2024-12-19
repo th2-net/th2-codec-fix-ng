@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?><!--
-  ~ Copyright 2023 Exactpro (Exactpro Systems Limited)
+  ~ Copyright 2023-2024 Exactpro (Exactpro Systems Limited)
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -7384,6 +7384,14 @@
             <attribute name="IsAdmin" type="java.lang.Boolean">false</attribute>
             <attribute name="MessageType" type="java.lang.String">TEST_3</attribute>
             <field name="OuterGroup" reference="component-OuterGroup"/>
+        </message>
+        <message name="TimeZoneTestMessage">
+            <attribute name="entity_type" type="java.lang.String">Message</attribute>
+            <attribute name="IsAdmin" type="java.lang.Boolean">false</attribute>
+            <attribute name="MessageType" type="java.lang.String">TEST_4</attribute>
+            <field name="TransactTime" reference="field-TransactTime" required="true"/>
+            <field name="TotalVolumeTradedDate" reference="field-TotalVolumeTradedDate" required="true"/>
+            <field name="TotalVolumeTradedTime" reference="field-TotalVolumeTradedTime" required="true"/>
         </message>
         <message id="component-OuterComponent" name="OuterComponent">
             <attribute name="entity_type" type="java.lang.String">Component</attribute>

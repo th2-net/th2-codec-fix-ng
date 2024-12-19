@@ -1,4 +1,4 @@
-# th2-codec-fix-ng 0.1.1
+# th2-codec-fix-ng 0.1.2
 
 This codec can be used in dirty mode for decoding and encoding messages via the FIX protocol.
 
@@ -46,6 +46,10 @@ default value: `true`. If `true`, decodes `components` to nested maps instead of
 Component benchmark results available [here](docs/benchmarks/jmh-benchmark.md).
 
 ## Release notes
+
+### 0.1.2
+  + fixed: codec can't encode fields with type `LocalDateTime`, `LocalDate`, `LocalTime` and value with timezone 
+  + Updated sailfish: `3.4.260`
 
 ### 0.1.1
   + `decodeDelimiter` setting option added.
