@@ -23,6 +23,7 @@ import com.exactpro.sf.common.messages.structures.IDictionaryStructure
 import com.exactpro.sf.common.messages.structures.IFieldStructure
 import com.exactpro.sf.common.messages.structures.IMessageStructure
 import com.exactpro.sf.common.messages.structures.StructureUtils
+import com.exactpro.sf.comparison.conversion.MultiConverter
 import com.exactpro.th2.codec.api.IPipelineCodec
 import com.exactpro.th2.codec.api.IReportingContext
 import com.exactpro.th2.codec.fixng.FixNgCodecFactory.Companion.PROTOCOL
@@ -356,9 +357,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                     value is String -> {
                         try {
                             when (field.primitiveType) {
-                                LocalDateTime::class.java -> LocalDateTime.parse(value)
-                                LocalDate::class.java -> LocalDate.parse(value)
-                                LocalTime::class.java -> LocalTime.parse(value)
+                                LocalDateTime::class.java -> MultiConverter.convert<LocalDateTime>(value, LocalDateTime::class.java)
+                                LocalDate::class.java -> MultiConverter.convert<LocalDate>(value, LocalDate::class.java)
+                                LocalTime::class.java -> MultiConverter.convert<LocalTime>(value, LocalTime::class.java)
                                 java.lang.Boolean::class.java -> when {
                                     value.equals("true", true) -> true
                                     value.equals("false", true) -> false
