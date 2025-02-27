@@ -47,6 +47,13 @@ Component benchmark results available [here](docs/benchmarks/jmh-benchmark.md).
 
 ## Release notes
 
+### next
+
++ Updated th2 gradle plugin `0.2.2` (bom: `4.10.0`)
+  + Added suppressions:
+    + CVE-2025-25193 - This vulnerability does not affect us because the component don’t use netty for reading environment files, only for network interaction.
+    + CVE-2025-24970 - The component doesn’t directly use SSL for communication between each other  because they are deployed in cluster.
+
 ### 0.1.2
   + fixed: codec can't encode fields with type `LocalDateTime`, `LocalDate`, `LocalTime` and value with timezone 
   + Updated sailfish: `3.4.260`
