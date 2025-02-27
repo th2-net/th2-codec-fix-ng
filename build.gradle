@@ -102,6 +102,11 @@ dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter:5.12.0"
     testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
     testImplementation "org.assertj:assertj-core:3.27.3"
+    testRuntimeOnly('org.junit.platform:junit-platform-launcher') {
+        because 'This artifact will not be added automatically since gradle 9.0. You can read more information here:' +
+                'https://docs.gradle.org/8.3/userguide/upgrading_version_8.html#test_framework_implementation_dependencies'
+    }
+
 }
 
 test.useJUnitPlatform()
