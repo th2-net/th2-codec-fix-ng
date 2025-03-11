@@ -1,6 +1,6 @@
 plugins {
     id "application"
-    id "com.exactpro.th2.gradle.component" version "0.2.3"
+    id "com.exactpro.th2.gradle.component" version "0.2.4"
     id "org.jetbrains.kotlin.jvm" version "$kotlin_version"
     id "org.jetbrains.kotlin.kapt" version "$kotlin_version"
     id "me.champeau.jmh" version "0.7.3"
