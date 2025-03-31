@@ -78,7 +78,7 @@ repositories {
 
 dependencies {
     implementation "com.exactpro.th2:common:$commonVersion"
-    implementation "com.exactpro.th2:codec:5.5.0-dev"
+    implementation "com.exactpro.th2:codec:5.6.0-update-dependencies-14127415383-7098187-SNAPSHOT"
 
     implementation ("com.exactpro.sf:sailfish-common:$sailfishVersion") {
         exclude group: "commons-configuration", module: "commons-configuration" // because of the vulnerability
