@@ -1,19 +1,9 @@
 plugins {
     id "application"
-    id "com.exactpro.th2.gradle.component" version "0.2.4"
-    id "org.jetbrains.kotlin.jvm" version "$kotlin_version"
-    id "org.jetbrains.kotlin.kapt" version "$kotlin_version"
-    id "me.champeau.jmh" version "0.7.3"
-}
-
-th2JavaRelease {
-    targetJavaVersion.set(JavaVersion.VERSION_11)
-}
-
-ext {
-    sailfishVersion = '3.4.260'
-    commonVersion = '5.14.0-dev'
-    jmhVersion = '1.37'
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.th2.component)
+    alias(libs.plugins.jmh)
 }
 
 group = 'com.exactpro.th2'
@@ -27,28 +17,6 @@ ext.excludeSailfish = { rcd ->
 }
 
 repositories {
-    maven {
-        name 'Sonatype_snapshots'
-        url 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
-        content {
-            excludeSailfish(it)
-        }
-    }
-
-    // ignoreGradleMetadataRedirection is used for sonatype because
-    // Sailfish dependencies have constrains that interfere with our BOM
-    // so we exclude Gradle metadata for this repositories.
-    // We've checked these versions - they are compatible and safe to use
-    maven {
-        name 'Sonatype_snapshots'
-        url 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
-        metadataSources {
-            mavenPom()
-            artifact()
-            ignoreGradleMetadataRedirection()
-        }
-    }
-
     maven {
         name 'Sonatype_releases'
         url 'https://s01.oss.sonatype.org/content/repositories/releases/'
@@ -77,10 +45,10 @@ repositories {
 }
 
 dependencies {
-    implementation "com.exactpro.th2:common:$commonVersion"
-    implementation "com.exactpro.th2:codec:5.5.0-dev"
+    implementation(libs.th2.common)
+    implementation(libs.th2.codec)
 
-    implementation ("com.exactpro.sf:sailfish-common:$sailfishVersion") {
+    implementation (libs.sailfish.common) {
         exclude group: "commons-configuration", module: "commons-configuration" // because of the vulnerability
         exclude group: "com.fasterxml.jackson.dataformat", module: "jackson-dataformat-yaml" // because of the vulnerability
         exclude group: "com.exactpro.mina", module: "apache-mina-core" // because of the vulnerability
@@ -88,25 +56,24 @@ dependencies {
     }
 
     implementation "io.netty:netty-buffer"
-    implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
-    implementation "io.github.oshai:kotlin-logging:5.1.4"
+    implementation "org.jetbrains.kotlin:kotlin-reflect"
+    implementation(libs.kotlin.logging)
 
-    compileOnly "com.google.auto.service:auto-service:1.1.1"
-    annotationProcessor "com.google.auto.service:auto-service:1.1.1"
-    kapt "com.google.auto.service:auto-service:1.1.1"
+    compileOnly(libs.auto.service)
+    kapt(libs.auto.service)
 
-    jmh "org.openjdk.jmh:jmh-core:$jmhVersion"
-    jmh "org.openjdk.jmh:jmh-generator-annprocess:$jmhVersion"
-    jmh "org.openjdk.jmh:jmh-generator-bytecode:$jmhVersion"
+    jmh(libs.jmh.core)
+    jmh(libs.jmh.generator.annprocess)
+    jmh(libs.jmh.generator.bytecode)
 
-    testImplementation "org.junit.jupiter:junit-jupiter:5.12.1"
-    testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
-    testImplementation "org.assertj:assertj-core:3.27.3"
-    testRuntimeOnly('org.junit.platform:junit-platform-launcher') {
+    testImplementation(libs.assertj.core)
+    testImplementation(platform(libs.junit.bom))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("org.junit.platform:junit-platform-launcher") {
         because 'This artifact will not be added automatically since gradle 9.0. You can read more information here:' +
                 'https://docs.gradle.org/8.3/userguide/upgrading_version_8.html#test_framework_implementation_dependencies'
     }
-
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 }
 
 test.useJUnitPlatform()

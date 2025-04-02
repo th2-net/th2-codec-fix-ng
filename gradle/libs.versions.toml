@@ -1,0 +1,27 @@
+[versions]
+kotlin = "2.1.20"
+th2-plugin = "0.2.4"
+jmh = "1.37"
+
+[libraries]
+th2-common = { group = "com.exactpro.th2", name = "common", version = "5.15.0-dev" }
+th2-codec = { group = "com.exactpro.th2", name = "codec", version = "5.5.0-dev" }
+
+sailfish-common = { group = "com.exactpro.sf", name = "sailfish-common", version = "3.4.260" }
+
+kotlin-logging = { group = "io.github.oshai", name = "kotlin-logging", version = "7.0.6" }
+
+auto-service = { group = "com.google.auto.service", name = "auto-service", version = "1.1.1" }
+
+jmh-core = { group = "org.openjdk.jmh", name = "jmh-core", version.ref = "jmh" }
+jmh-generator-annprocess = { group = "org.openjdk.jmh", name = "jmh-generator-annprocess", version.ref = "jmh" }
+jmh-generator-bytecode = { group = "org.openjdk.jmh", name = "jmh-generator-bytecode", version.ref = "jmh" }
+
+junit-bom = { group = "org.junit", name = "junit-bom", version = "5.12.1" }
+assertj-core = { group = "org.assertj", name = "assertj-core", version = "3.27.3" }
+
+[plugins]
+th2-component = { id = "com.exactpro.th2.gradle.component", version.ref = "th2-plugin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
+jmh = { id = "me.champeau.jmh", version = "0.7.3" }
