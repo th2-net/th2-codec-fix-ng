@@ -139,6 +139,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 { handleError(isDirty, context, it) },
             )
             val bodyLength = bodyLengthString.toIntOrNull() ?: handleError(isDirty, context, "Wrong number value in integer field 'BodyLength'. Value: $bodyLengthString.", bodyLengthString)
+            validateBodyLength(isDirty, context, buffer, buffer.readerIndex(), bodyLength)
             val msgType = buffer.readField(
                 TAG_MSG_TYPE, decodeDelimiter, charset, isDirty,
                 { "BodyLength ($TAG_BODY_LENGTH) is followed by $it tag instead of MsgType ($TAG_MSG_TYPE)" },
@@ -180,6 +181,50 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         }
 
         return MessageGroup(messages)
+    }
+
+    private fun validateBodyLength(
+        isDirty: Boolean,
+        context: IReportingContext,
+        buffer: ByteBuf,
+        endBodyLengthOffset: Int,
+        bodyLength: Any
+    ) {
+        if (bodyLength !is Int) { // TODO: write tset
+            handleError(
+                isDirty, context,
+                "BodyLength ($TAG_BODY_LENGTH) field must have integer value instead of '$bodyLength'(${bodyLength.javaClass.simpleName})"
+            )
+            return
+        }
+        if (bodyLength < 0) { // TODO: write tset
+            handleError(
+                isDirty, context,
+                "BodyLength ($TAG_BODY_LENGTH) field must have positive or zero value instead of $bodyLength"
+            )
+            return
+        }
+        val realBodyLength = buffer.readableBytes() - CHECKSUM_FIELD_SIZE
+        if (bodyLength > realBodyLength) { // TODO: write tset
+            handleError(
+                isDirty, context,
+                "BodyLength ($TAG_BODY_LENGTH) field is grater than real message body $realBodyLength"
+            )
+            return
+        }
+        val index = buffer.readerIndex()
+        try {
+            buffer.readerIndex(endBodyLengthOffset + bodyLength)
+            val tag = buffer.readTag { handleError(isDirty, context, it) }
+            if (tag != TAG_CHECKSUM) { // TODO: write tset
+                handleError(
+                    isDirty, context,
+                    "BodyLength ($TAG_BODY_LENGTH) must forward to the CheckSum ($TAG_CHECKSUM) instead of $tag tag"
+                )
+            }
+        } finally {
+            buffer.readerIndex(index)
+        }
     }
 
     private fun handleError(isDirty: Boolean, context: IReportingContext, errorMessageText: String, value: Any = Unit) = if (isDirty) {
@@ -539,9 +584,15 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         private const val ENCODE_MODE_PROPERTY_NAME = "encode-mode"
         private const val DIRTY_ENCODE_MODE = "dirty"
         private const val TAG_BEGIN_STRING = 8
+        /**
+         * Message length, in bytes, forward to the CheckSum
+         * field. ALWAYS SECOND FIELD IN MESSAGE.
+         * (Always unencrypted)
+         */
         private const val TAG_BODY_LENGTH = 9
         private const val TAG_CHECKSUM = 10
         private const val TAG_MSG_TYPE = 35
+        private const val CHECKSUM_FIELD_SIZE = 2 + 1 + 3 + 1 // tag(10) + '=' + value(000) + SOH
         private const val DIRTY_MODE_WARNING_PREFIX = "Dirty mode WARNING: "
 
         private fun containsNonPrintableChars(stringValue: String) = stringValue.any { it !in ' ' .. '~' }
