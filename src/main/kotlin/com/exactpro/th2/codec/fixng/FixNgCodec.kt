@@ -181,6 +181,12 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         return MessageGroup(messages)
     }
 
+    /**
+     * Information about 'BodyLength' field from FIX specification:
+     * Message length, in bytes, forward to the CheckSum field.
+     * ALWAYS SECOND FIELD IN MESSAGE.
+     * (Always unencrypted)
+     */
     private fun validateBodyLength(
         isDirty: Boolean,
         context: IReportingContext,
@@ -198,7 +204,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             )
             return
         }
-        val realBodyLength = buffer.readableBytes() - CHECKSUM_FIELD_SIZE
+        val realBodyLength = buffer.getLastTagIndex(decodeDelimiter) - buffer.readerIndex()
         if (bodyLength > realBodyLength) {
             handleError(
                 isDirty, context,
@@ -586,7 +592,6 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         private const val TAG_BODY_LENGTH = 9
         private const val TAG_CHECKSUM = 10
         private const val TAG_MSG_TYPE = 35
-        private const val CHECKSUM_FIELD_SIZE = 2 + 1 + 3 + 1 // tag(10) + '=' + value(000) + SOH
         private const val DIRTY_MODE_WARNING_PREFIX = "Dirty mode WARNING: "
 
         private fun containsNonPrintableChars(stringValue: String) = stringValue.any { it !in ' ' .. '~' }

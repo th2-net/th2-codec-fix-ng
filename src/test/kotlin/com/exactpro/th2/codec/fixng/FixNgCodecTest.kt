@@ -44,16 +44,6 @@ import java.time.LocalDateTime
 import kotlin.collections.set
 import kotlin.math.max
 
-/*
- * 8:
- *  - possible values (low because conn should check it)
- * 9:
- *  - should cover message from current position to 10 tag
- * 10:
- *  - must have value length 3
- *  - should be coder length
- */
-
 class FixNgCodecTest {
     private val dictionary: IDictionaryStructure = FixNgCodecTest::class.java.classLoader
         .getResourceAsStream("dictionary.xml")
@@ -212,7 +202,7 @@ class FixNgCodecTest {
     @ValueSource(chars = ['', '|'])
     fun `tags with 0 prefix decode (dirty)`(delimiter: Char) {
         with(parsedMessage) {
-            (body map "header").set("BodyLength", 303)
+            (body map "header").set("BodyLength", 302)
             decodeTest(
                 MSG_WITH_0_PREFIX,
                 dirtyMode = true,
@@ -220,7 +210,8 @@ class FixNgCodecTest {
                 expectedMessage = this,
                 expectedErrors = listOf(
                     "Tag with zero prefix at offset: 0, raw: '08=FIXT.1....'",
-                    "Tag with zero prefix at offset: 12, raw: '...09=303${delimiter}035...'",
+                    "Tag with zero prefix at offset: 12, raw: '...09=302${delimiter}035...'",
+                    "Tag with zero prefix at offset: 321, raw: '...010=191${delimiter}'",
                     "Tag with zero prefix at offset: 19, raw: '...035=8${delimiter}49=S...'",
                     "Tag with zero prefix at offset: 47, raw: '...034=10947${delimiter}...'",
                     "Tag with zero prefix at offset: 98, raw: '...011=zSuNbr...'",
@@ -230,7 +221,8 @@ class FixNgCodecTest {
                     "Tag with zero prefix at offset: 229, raw: '...0447=P${delimiter}452...'",
                     "Tag with zero prefix at offset: 321, raw: '...010=191${delimiter}'",
                     "Tag with zero prefix at offset: 321, raw: '...010=191${delimiter}'",
-                    // CheckSum is duplicated because it is read two times:
+                    // Warning for CheckSum field happens several times because it is read several times:
+                    // * at the body length check
                     // * at the end of body decoding
                     // * at the trailer decoding
                 ),
@@ -1182,7 +1174,7 @@ class FixNgCodecTest {
         private const val MSG_WITH_BODY_LENGTH_LESS_ZERO = "8=FIXT.1.19=$VALUE_BODY_LENGTH_LESS_ZERO35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
         private const val MSG_WITH_BODY_LENGTH_GREATER_REAL_BODY = "8=FIXT.1.19=$VALUE_BODY_LENGTH_GREATER_REAL_BODY35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
         private const val MSG_WITH_NO_CHECKSUM_AFTER_BODY = "8=FIXT.1.19=$VALUE_NO_CHECKSUM_AFTER_BODY35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
-        private const val MSG_WITH_0_PREFIX = "08=FIXT.1.109=303035=849=SENDER56=RECEIVER034=1094752=20230419-10:36:07.41508817=495504662011=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=80453=20448=NGALL1FX01447=D0452=76448=00447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.000008010=191"
+        private const val MSG_WITH_0_PREFIX = "08=FIXT.1.109=302035=849=SENDER56=RECEIVER034=1094752=20230419-10:36:07.41508817=495504662011=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=80453=20448=NGALL1FX01447=D0452=76448=00447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.000008010=191"
         private const val MSG_CORRECT_WITHOUT_BODY = "8=FIX.4.29=5535=034=12549=MZHOT052=20240801-08:03:01.22956=INET10=039"
         private const val MSG_ADDITIONAL_FIELD_DICT = "8=FIXT.1.19=30535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.000008461=1234510=143"
         private const val MSG_ADDITIONAL_FIELD_NO_DICT = "8=FIXT.1.19=30635=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.0000089999=5432110=097"

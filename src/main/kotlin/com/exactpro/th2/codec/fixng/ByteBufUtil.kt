@@ -146,3 +146,11 @@ fun ByteBuf.writeChecksum(delimiter: Byte) {
     readerIndex(index)
     writeTag(10).printInt(checksum % 256, 3).writeByte(delimiter.toInt())
 }
+
+fun ByteBuf.getLastTagIndex(delimiter: Byte): Int {
+    var maxNotDelimiterIndex = writerIndex() - 1
+    if (getByte(maxNotDelimiterIndex) == delimiter) {
+        maxNotDelimiterIndex -= 1
+    }
+    return indexOf(maxNotDelimiterIndex, 0, delimiter) + 1
+}
