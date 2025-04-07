@@ -131,21 +131,18 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
             val beginString = buffer.readField(
                 TAG_BEGIN_STRING, decodeDelimiter, charset, isDirty,
-                { "Message starts with $it tag instead of BeginString ($TAG_BEGIN_STRING)" },
                 { handleError(isDirty, context, it) },
-            )
+            ) { "Message starts with $it tag instead of BeginString ($TAG_BEGIN_STRING)" }
             val bodyLengthString = buffer.readField(
                 TAG_BODY_LENGTH, decodeDelimiter, charset, isDirty,
-                { "BeginString ($TAG_BEGIN_STRING) is followed by $it tag instead of BodyLength ($TAG_BODY_LENGTH)" },
                 { handleError(isDirty, context, it) },
-            )
+            ) { "BeginString ($TAG_BEGIN_STRING) is followed by $it tag instead of BodyLength ($TAG_BODY_LENGTH)" }
             val bodyLength = bodyLengthString.toIntOrNull() ?: handleError(isDirty, context, "Wrong number value in integer field 'BodyLength'. Value: $bodyLengthString.", bodyLengthString)
             validateBodyLength(isDirty, context, buffer, buffer.readerIndex(), bodyLength)
             val msgType = buffer.readField(
                 TAG_MSG_TYPE, decodeDelimiter, charset, isDirty,
-                { "BodyLength ($TAG_BODY_LENGTH) is followed by $it tag instead of MsgType ($TAG_MSG_TYPE)" },
                 { handleError(isDirty, context, it) }
-            )
+            ) { "BodyLength ($TAG_BODY_LENGTH) is followed by $it tag instead of MsgType ($TAG_MSG_TYPE)" }
             val messageDef = messagesByTypeForDecode[msgType] ?: error("Unknown message type: $msgType")
 
             val header = headerDef.decode(buffer, messageDef, isDirty, fieldsDecode, context)
@@ -279,33 +276,33 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
         source.forEachField(
             decodeDelimiter, charset, isDirty,
-            { tag, value ->
-                val field = get(tag) ?: if (isDirty) {
-                    when (this) {
-                        headerDef -> bodyDef[tag] ?: trailerDef[tag]
-                        trailerDef -> null
-                        else -> trailerDef[tag]
-                    }?.let { return@forEachField false } // we reached next part of the message
+            { handleError(isDirty, context, it) }
+        ) { tag, value ->
+            val field = get(tag) ?: if (isDirty) {
+                when (this) {
+                    headerDef -> bodyDef[tag] ?: trailerDef[tag]
+                    trailerDef -> null
+                    else -> trailerDef[tag]
+                }?.let { return@forEachField false } // we reached next part of the message
 
-                    val dictField = dictionaryFields[tag]
-                    if (dictField != null) {
-                        context.warning(DIRTY_MODE_WARNING_PREFIX + "Unexpected field in message. Field name: ${dictField.name}. Field value: $value.")
-                        dictField
-                    } else {
-                        context.warning(DIRTY_MODE_WARNING_PREFIX + "Field does not exist in dictionary. Field tag: $tag. Field value: $value.")
-                        Primitive(false, tag.toString(), emptyList(), String::class.java, emptySet(), tag)
-                    }
+                val dictField = dictionaryFields[tag]
+                if (dictField != null) {
+                    context.warning(DIRTY_MODE_WARNING_PREFIX + "Unexpected field in message. Field name: ${dictField.name}. Field value: $value.")
+                    dictField
                 } else {
-                    // we reached next part of the message
-                    return@forEachField false
+                    context.warning(DIRTY_MODE_WARNING_PREFIX + "Field does not exist in dictionary. Field tag: $tag. Field value: $value.")
+                    Primitive(false, tag.toString(), emptyList(), String::class.java, emptySet(), tag)
                 }
-
-                usedComponents.addAll(field.path)
-
-                field.decode(source, map, tagsSet, value, tag, isDirty, context)
-                return@forEachField true
+            } else {
+                // we reached next part of the message
+                return@forEachField false
             }
-        ) { handleError(isDirty, context, it) }
+
+            usedComponents.addAll(field.path)
+
+            field.decode(source, map, tagsSet, value, tag, isDirty, context)
+            return@forEachField true
+        }
 
         validateRequiredTags(requiredTags, tagsSet, isDirty, context)
         for (componentName in usedComponents) {
@@ -381,31 +378,31 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
         source.forEachField(
             decodeDelimiter, charset, isDirty,
-            { tag, value ->
-                val field = get(tag) ?: return@forEachField false
+            { handleError(isDirty, context, it) }
+        ) { tag, value ->
+            val field = get(tag) ?: return@forEachField false
 
-                val group = if (tag == delimiter || tags.contains(tag) || map == null) {
-                    if (tag != delimiter) {
-                        handleError(
-                            isDirty,
-                            context,
-                            "Field ${field.name} ($tag) appears before delimiter ($delimiter)"
-                        )
-                    }
-
-                    tags.clear()
-                    mutableMapOf<String, Any>().also {
-                        list.add(it)
-                        map = it
-                    }
-                } else {
-                    map ?: error("Group entry map can't be null.")
+            val group = if (tag == delimiter || tags.contains(tag) || map == null) {
+                if (tag != delimiter) {
+                    handleError(
+                        isDirty,
+                        context,
+                        "Field ${field.name} ($tag) appears before delimiter ($delimiter)"
+                    )
                 }
 
-                field.decode(source, group, tags, value, tag, isDirty, context)
-                return@forEachField true
+                tags.clear()
+                mutableMapOf<String, Any>().also {
+                    list.add(it)
+                    map = it
+                }
+            } else {
+                map ?: error("Group entry map can't be null.")
             }
-        ) { handleError(isDirty, context, it) }
+
+            field.decode(source, group, tags, value, tag, isDirty, context)
+            return@forEachField true
+        }
 
         if (list.size != count) {
             val errorText = "Unexpected group $name count: ${list.size} (expected: $count)"
