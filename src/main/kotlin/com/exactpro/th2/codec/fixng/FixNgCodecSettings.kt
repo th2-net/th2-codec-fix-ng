@@ -1,5 +1,5 @@
 /*
- * Copyright 2023-2024 Exactpro (Exactpro Systems Limited)
+ * Copyright 2023-2025 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package com.exactpro.th2.codec.fixng
 
 import com.exactpro.th2.codec.api.IPipelineCodecSettings
-import com.exactpro.th2.codec.fixng.FixNgCodec.Companion.SOH_CHAR
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.databind.DeserializationContext
 import com.fasterxml.jackson.databind.JsonDeserializer
