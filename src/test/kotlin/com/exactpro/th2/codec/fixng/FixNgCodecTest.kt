@@ -205,6 +205,98 @@ class FixNgCodecTest {
 
     @ParameterizedTest
     @ValueSource(chars = ['', '|'])
+    fun `short check sum value decode (dirty)`(delimiter: Char) {
+        with(parsedMessage) {
+            (body map "header").set("BodyLength", 296)
+            body.set("ExecID", "4955046999")
+            (body map "trailer").set("CheckSum", VALUE_SHORT_CHECK_SUM)
+            decodeTest(
+                MSG_WITH_SHORT_CHECK_SUM,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf(
+                    "CheckSum (10) field must have 3 bytes length, instead of size: 1, value: '$VALUE_SHORT_CHECK_SUM'",
+                )
+            )
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `short check sum value decode (not dirty)`(delimiter: Char) {
+        decodeTest(
+            MSG_WITH_SHORT_CHECK_SUM,
+            dirtyMode = false,
+            delimiter = delimiter,
+            expectedErrors = listOf(
+                "CheckSum (10) field must have 3 bytes length, instead of size: 1, value: '3'",
+            )
+        )
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `too big check sum value decode (dirty)`(delimiter: Char) {
+        with(parsedMessage) {
+            (body map "trailer").set("CheckSum", VALUE_TOO_BIG_CHECK_SUM)
+            decodeTest(
+                MSG_WITH_TOO_BIG_CHECK_SUM,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf(
+                    "CheckSum (10) field must have value from 0 to 255 included both limits instead of '$VALUE_TOO_BIG_CHECK_SUM' value",
+                )
+            )
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `too big check sum value decode (not dirty)`(delimiter: Char) {
+        decodeTest(
+            MSG_WITH_TOO_BIG_CHECK_SUM,
+            dirtyMode = false,
+            delimiter = delimiter,
+            expectedErrors = listOf(
+                "CheckSum (10) field must have value from 0 to 255 included both limits instead of '$VALUE_TOO_BIG_CHECK_SUM' value",
+            )
+        )
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `incorrect check sum value decode (dirty)`(delimiter: Char) {
+        with(parsedMessage) {
+            (body map "trailer").set("CheckSum", VALUE_INCORRECT_CHECK_SUM)
+            decodeTest(
+                MSG_WITH_INCORRECT_CHECK_SUM,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf(
+                    "CheckSum (10) field has $VALUE_INCORRECT_CHECK_SUM value which isn't matched to calculated value 191",
+                )
+            )
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `incorrect check sum value decode (not dirty)`(delimiter: Char) {
+        decodeTest(
+            MSG_WITH_INCORRECT_CHECK_SUM,
+            dirtyMode = false,
+            delimiter = delimiter,
+            expectedErrors = listOf(
+                "CheckSum (10) field has $VALUE_INCORRECT_CHECK_SUM value which isn't matched to calculated value 191",
+            )
+        )
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
     fun `tags with 0 prefix decode (dirty)`(delimiter: Char) {
         with(parsedMessage) {
             (body map "header").set("BodyLength", 302)
@@ -1181,8 +1273,14 @@ class FixNgCodecTest {
         private const val VALUE_BODY_LENGTH_LESS_ZERO = -10
         private const val VALUE_BODY_LENGTH_GREATER_REAL_BODY = 999
         private const val VALUE_NO_CHECKSUM_AFTER_BODY = 267
+        private const val VALUE_SHORT_CHECK_SUM = "3"
+        private const val VALUE_TOO_BIG_CHECK_SUM = "999"
+        private const val VALUE_INCORRECT_CHECK_SUM = "255"
 
         private const val MSG_CORRECT = "8=FIXT.1.19=29535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
+        private const val MSG_WITH_SHORT_CHECK_SUM = "8=FIXT.1.19=29635=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=495504699911=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=$VALUE_SHORT_CHECK_SUM"
+        private const val MSG_WITH_TOO_BIG_CHECK_SUM = "8=FIXT.1.19=29535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=$VALUE_TOO_BIG_CHECK_SUM"
+        private const val MSG_WITH_INCORRECT_CHECK_SUM = "8=FIXT.1.19=29535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=$VALUE_INCORRECT_CHECK_SUM"
         private const val MSG_WITH_NOT_INT_BODY_LENGTH = "8=FIXT.1.19=$VALUE_NOT_INT_BODY_LENGTH35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=069"
         private const val MSG_WITH_BODY_LENGTH_LESS_ZERO = "8=FIXT.1.19=$VALUE_BODY_LENGTH_LESS_ZERO35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=173"
         private const val MSG_WITH_BODY_LENGTH_GREATER_REAL_BODY = "8=FIXT.1.19=$VALUE_BODY_LENGTH_GREATER_REAL_BODY35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=202"

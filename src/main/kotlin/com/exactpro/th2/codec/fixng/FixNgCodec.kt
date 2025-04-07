@@ -211,7 +211,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             if (valueSize != 3) {
                 handleError(
                     isDirty, context,
-                    "CheckSum ($TAG_CHECKSUM) field must have 3 bytes length, instead of size: $valueSize, value: $value",
+                    "CheckSum ($TAG_CHECKSUM) field must have 3 bytes length, instead of size: $valueSize, value: '$value'",
                 )
                 return
             }
@@ -223,10 +223,10 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 )
                 return
             }
-            if (checksum < 0 || 999 < checksum) {
+            if (checksum < 0 || 255 < checksum) {
                 handleError(
                     isDirty, context,
-                    "CheckSum ($TAG_CHECKSUM) field must have value from 0 to 999 included both limits instead of $checksum"
+                    "CheckSum ($TAG_CHECKSUM) field must have value from 0 to 255 included both limits instead of '$checksum' value"
                 )
                 return
             }
@@ -235,7 +235,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             if (checksum != calculatedChecksum) {
                 handleError(
                     isDirty, context,
-                    "CheckSum ($TAG_CHECKSUM) field value $checksum isn't matched to calculated value $calculatedChecksum"
+                    "CheckSum ($TAG_CHECKSUM) field has $checksum value which isn't matched to calculated value $calculatedChecksum"
                 )
             }
         } finally {
