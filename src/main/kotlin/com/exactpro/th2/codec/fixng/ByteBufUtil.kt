@@ -114,8 +114,8 @@ inline fun ByteBuf.forEachField(
     delimiter: Byte,
     charset: Charset,
     isDirty: Boolean,
-    action: (tag: Int, value: String) -> Boolean,
     warningHandler: (String) -> Unit,
+    action: (tag: Int, value: String) -> Boolean,
 ) {
     while (isReadable) {
         val offset = readerIndex()
@@ -130,8 +130,8 @@ inline fun ByteBuf.readField(
     delimiter: Byte,
     charset: Charset,
     isDirty: Boolean,
-    message: (Int) -> String,
     warningHandler: (String) -> Unit,
+    message: (Int) -> String,
 ): String = readTag(warningHandler).let {
     check(it == tag) { message(it) }
     readValue(delimiter, charset, isDirty)
@@ -157,4 +157,12 @@ fun ByteBuf.calculateChecksum(delimiter: Byte): Int {
     }
     readerIndex(index)
     return checksum % 256
+}
+
+fun ByteBuf.getLastTagIndex(delimiter: Byte): Int {
+    var maxNotDelimiterIndex = writerIndex() - 1
+    if (getByte(maxNotDelimiterIndex) == delimiter) {
+        maxNotDelimiterIndex -= 1
+    }
+    return indexOf(maxNotDelimiterIndex, 0, delimiter) + 1
 }
