@@ -190,14 +190,10 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         endBodyLengthOffset: Int,
         bodyLength: Any
     ) {
-        if (bodyLength !is Int) { // TODO: write tset
-            handleError(
-                isDirty, context,
-                "BodyLength ($TAG_BODY_LENGTH) field must have integer value instead of '$bodyLength'(${bodyLength.javaClass.simpleName})"
-            )
+        if (bodyLength !is Int) {
             return
         }
-        if (bodyLength < 0) { // TODO: write tset
+        if (bodyLength < 0) {
             handleError(
                 isDirty, context,
                 "BodyLength ($TAG_BODY_LENGTH) field must have positive or zero value instead of $bodyLength"
@@ -205,10 +201,10 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             return
         }
         val realBodyLength = buffer.readableBytes() - CHECKSUM_FIELD_SIZE
-        if (bodyLength > realBodyLength) { // TODO: write tset
+        if (bodyLength > realBodyLength) {
             handleError(
                 isDirty, context,
-                "BodyLength ($TAG_BODY_LENGTH) field is grater than real message body $realBodyLength"
+                "BodyLength ($TAG_BODY_LENGTH) field value $bodyLength is grater than real message body $realBodyLength"
             )
             return
         }
@@ -216,7 +212,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         try {
             buffer.readerIndex(endBodyLengthOffset + bodyLength)
             val tag = buffer.readTag { handleError(isDirty, context, it) }
-            if (tag != TAG_CHECKSUM) { // TODO: write tset
+            if (tag != TAG_CHECKSUM) {
                 handleError(
                     isDirty, context,
                     "BodyLength ($TAG_BODY_LENGTH) must forward to the CheckSum ($TAG_CHECKSUM) instead of $tag tag"
