@@ -1,4 +1,4 @@
-# th2-codec-fix-ng 0.1.3
+# th2-codec-fix-ng 0.1.4
 
 This codec can be used in dirty mode for decoding and encoding messages via the FIX protocol.
 
@@ -46,6 +46,10 @@ default value: `true`. If `true`, decodes `components` to nested maps instead of
 Component benchmark results available [here](docs/benchmarks/jmh-benchmark.md).
 
 ## Release notes
+
+### 0.1.4
+
+* Fix: codec checks that tag value may not contain leading zeros.
 
 ### 0.1.3
 + Updated:

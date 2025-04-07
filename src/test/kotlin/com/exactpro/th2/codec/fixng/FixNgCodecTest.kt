@@ -1,5 +1,5 @@
 /*
- * Copyright 2023-2024 Exactpro (Exactpro Systems Limited)
+ * Copyright 2023-2025 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,9 @@ import io.netty.buffer.CompositeByteBuf
 import io.netty.buffer.Unpooled
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.junit.jupiter.api.Assertions.assertAll
+import org.junit.jupiter.api.assertNotNull
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
@@ -38,6 +41,7 @@ import java.math.BigDecimal
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.LocalDateTime
+import kotlin.math.max
 
 class FixNgCodecTest {
     private val dictionary: IDictionaryStructure = FixNgCodecTest::class.java.classLoader
@@ -74,6 +78,41 @@ class FixNgCodecTest {
         decodeTest(MSG_CORRECT, dirtyMode = isDirty, delimiter = delimiter)
 
     @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `tags with 0 prefix decode (dirty)`(delimiter: Char) =
+        decodeTest(
+            MSG_WITH_0_PREFIX,
+            dirtyMode = true,
+            delimiter = delimiter,
+            expectedErrors = listOf(
+                "Tag with zero prefix at offset: 0, raw: '08=FIXT.1....'",
+                "Tag with zero prefix at offset: 12, raw: '...09=295${delimiter}035...'",
+                "Tag with zero prefix at offset: 19, raw: '...035=8${delimiter}49=S...'",
+                "Tag with zero prefix at offset: 47, raw: '...034=10947${delimiter}...'",
+                "Tag with zero prefix at offset: 98, raw: '...011=zSuNbr...'",
+                "Tag with zero prefix at offset: 186, raw: '...0453=2${delimiter}044...'",
+                "Tag with zero prefix at offset: 193, raw: '...0448=NGALL...'",
+                "Tag with zero prefix at offset: 215, raw: '...0452=76${delimiter}44...'",
+                "Tag with zero prefix at offset: 229, raw: '...0447=P${delimiter}452...'",
+                "Tag with zero prefix at offset: 321, raw: '...010=191${delimiter}'",
+                "Tag with zero prefix at offset: 321, raw: '...010=191${delimiter}'",
+                // CheckSum is duplicated because it is read two times:
+                // * at the end of body decoding
+                // * at the trailer decoding
+            ),
+        )
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `tags with 0 prefix decode (not dirty)`(delimiter: Char) =
+        decodeTest(
+            MSG_WITH_0_PREFIX,
+            dirtyMode = false,
+            delimiter = delimiter,
+            expectedErrors = listOf("Tag with zero prefix at offset: 0, raw: '08=FIXT.1....'"),
+        )
+
+    @ParameterizedTest
     @MethodSource("configs")
     fun `simple decode to string values`(isDirty: Boolean, delimiter: Char) =
         decodeTest(MSG_CORRECT, dirtyMode = isDirty, delimiter = delimiter, decodeToStringValues = true)
@@ -108,7 +147,7 @@ class FixNgCodecTest {
             MSG_ADDITIONAL_FIELD_DICT,
             dirtyMode = true,
             delimiter = delimiter,
-            "Unexpected field in message. Field name: CFICode. Field value: 12345."
+            expectedErrors = listOf("Unexpected field in message. Field name: CFICode. Field value: 12345."),
         )
     }
 
@@ -122,7 +161,7 @@ class FixNgCodecTest {
             MSG_ADDITIONAL_FIELD_DICT,
             dirtyMode = false,
             delimiter = delimiter,
-            "Required tag missing. Tag: 10."
+            expectedErrors = listOf("Required tag missing. Tag: 10."),
         )
     }
 
@@ -144,7 +183,7 @@ class FixNgCodecTest {
             MSG_ADDITIONAL_FIELD_NO_DICT,
             dirtyMode = true,
             delimiter = delimiter,
-            "Field does not exist in dictionary. Field tag: 9999. Field value: 54321."
+            expectedErrors = listOf("Field does not exist in dictionary. Field tag: 9999. Field value: 54321."),
         )
     }
 
@@ -158,7 +197,7 @@ class FixNgCodecTest {
             MSG_ADDITIONAL_FIELD_NO_DICT,
             dirtyMode = false,
             delimiter = delimiter,
-            "Required tag missing. Tag: 10."
+            expectedErrors = listOf("Required tag missing. Tag: 10."),
         )
     }
 
@@ -200,7 +239,7 @@ class FixNgCodecTest {
             MSG_REQUIRED_FIELD_REMOVED,
             dirtyMode = isDirty,
             delimiter = delimiter,
-            "Required tag missing. Tag: 17."
+            expectedErrors = listOf("Required tag missing. Tag: 17."),
         )
     }
 
@@ -226,7 +265,7 @@ class FixNgCodecTest {
             MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_FIRST_ENTRY,
             dirtyMode = isDirty,
             delimiter = delimiter,
-            "Field PartyIDSource (447) appears before delimiter (448)"
+            expectedErrors = listOf("Field PartyIDSource (447) appears before delimiter (448)")
         )
     }
 
@@ -252,7 +291,7 @@ class FixNgCodecTest {
             MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_SECOND_ENTRY,
             dirtyMode = isDirty,
             delimiter = delimiter,
-            "Field PartyIDSource (447) appears before delimiter (448)"
+            expectedErrors = listOf("Field PartyIDSource (447) appears before delimiter (448)"),
         )
     }
 
@@ -271,7 +310,7 @@ class FixNgCodecTest {
             MSG_WRONG_ENUM,
             dirtyMode = isDirty,
             delimiter = delimiter,
-            "Invalid value in enum field ExecType. Actual: X."
+            expectedErrors = listOf("Invalid value in enum field ExecType. Actual: X."),
         )
     }
 
@@ -309,7 +348,7 @@ class FixNgCodecTest {
             MSG_WRONG_TYPE,
             dirtyMode = isDirty,
             delimiter = delimiter,
-            "Wrong number value in java.math.BigDecimal field 'LeavesQty'. Value: Five."
+            expectedErrors = listOf("Wrong number value in java.math.BigDecimal field 'LeavesQty'. Value: Five."),
         )
     }
 
@@ -324,14 +363,24 @@ class FixNgCodecTest {
     @ValueSource(chars = ['', '|'])
     fun `decode with empty value (dirty)`(delimiter: Char) {
         parsedBody["Account"] = ""
-        decodeTest(MSG_EMPTY_VAL, dirtyMode = true, delimiter = delimiter, "Empty value in the field 'Account'.")
+        decodeTest(
+            MSG_EMPTY_VAL,
+            dirtyMode = true,
+            delimiter = delimiter,
+            expectedErrors = listOf("Empty value in the field 'Account'.")
+        )
     }
 
     @ParameterizedTest
     @ValueSource(chars = ['', '|'])
     fun `decode with empty value (non dirty)`(delimiter: Char) {
         parsedBody["Account"] = ""
-        decodeTest(MSG_EMPTY_VAL, dirtyMode = false, delimiter = delimiter, "No valid value at offset: 235")
+        decodeTest(
+            MSG_EMPTY_VAL,
+            dirtyMode = false,
+            delimiter = delimiter,
+            expectedErrors = listOf("No valid value at offset: 235"),
+        )
     }
 
     @ParameterizedTest
@@ -354,7 +403,7 @@ class FixNgCodecTest {
             MSG_NON_PRINTABLE,
             dirtyMode = isDirty,
             delimiter = delimiter,
-            "Non printable characters in the field 'Account'."
+            expectedErrors = listOf("Non printable characters in the field 'Account'."),
         )
     }
 
@@ -393,14 +442,19 @@ class FixNgCodecTest {
             MSG_TAG_OUT_OF_ORDER,
             dirtyMode = true,
             delimiter = delimiter,
-            "Unexpected field in message. Field name: LegUnitOfMeasure. Field value: 500"
+            expectedErrors = listOf("Unexpected field in message. Field name: LegUnitOfMeasure. Field value: 500"),
         )
     }
 
     @ParameterizedTest
     @ValueSource(chars = ['', '|'])
     fun `tag appears out of order (non dirty)`(delimiter: Char) {
-        decodeTest(MSG_TAG_OUT_OF_ORDER, dirtyMode = false, delimiter = delimiter, "Tag appears out of order: 999")
+        decodeTest(
+            MSG_TAG_OUT_OF_ORDER,
+            dirtyMode = false,
+            delimiter = delimiter,
+            expectedErrors = listOf("Tag appears out of order: 999"),
+        )
     }
 
     @ParameterizedTest
@@ -422,7 +476,7 @@ class FixNgCodecTest {
             MSG_NESTED_REQ_COMPONENTS_MISSED_REQ,
             dirtyMode = isDirty,
             delimiter = delimiter,
-            expectedErrorText = "Required tag missing. Tag: 40.",
+            expectedErrors = listOf("Required tag missing. Tag: 40."),
             expectedMessage = parsedMessageWithNestedComponents
         )
     }
@@ -465,7 +519,7 @@ class FixNgCodecTest {
             MSG_NESTED_OPT_COMPONENTS_MISSED_REQ,
             dirtyMode = isDirty,
             delimiter = delimiter,
-            expectedErrorText = "Required tag missing. Tag: 40.",
+            expectedErrors = listOf("Required tag missing. Tag: 40."),
             expectedMessage = message
         )
     }
@@ -480,7 +534,7 @@ class FixNgCodecTest {
             MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS,
             dirtyMode = isDirty,
             delimiter = delimiter,
-            expectedErrorText = "Required tag missing. Tag: 40.",
+            expectedErrors = listOf("Required tag missing. Tag: 40."),
             expectedMessage = message
         )
     }
@@ -510,9 +564,8 @@ class FixNgCodecTest {
             MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_OUTER_FIELDS_AND_REQ_INNER_FIELD,
             dirtyMode = isDirty,
             delimiter = delimiter,
-            expectedErrorText = "Required tag missing. Tag: 40.",
-            expectedSecondErrorText = "Required tag missing. Tag: 151.",
-            expectedMessage = message
+            expectedErrors = listOf("Required tag missing. Tag: 40.", "Required tag missing. Tag: 151."),
+            expectedMessage = message,
         )
     }
 
@@ -628,8 +681,7 @@ class FixNgCodecTest {
         rawMessageString: String,
         dirtyMode: Boolean,
         delimiter: Char,
-        expectedErrorText: String? = null,
-        expectedSecondErrorText: String? = null,
+        expectedErrors: List<String> = emptyList(),
         expectedMessage: ParsedMessage = parsedMessage,
         decodeToStringValues: Boolean = false
     ) {
@@ -637,8 +689,7 @@ class FixNgCodecTest {
             decodeTestDirty(
                 rawMessageString.replaceSoh(delimiter),
                 delimiter,
-                expectedErrorText,
-                expectedSecondErrorText,
+                expectedErrors,
                 expectedMessage,
                 decodeToStringValues
             )
@@ -646,7 +697,7 @@ class FixNgCodecTest {
             decodeTestNonDirty(
                 rawMessageString.replaceSoh(delimiter),
                 delimiter,
-                expectedErrorText,
+                expectedErrors.firstOrNull(),
                 expectedMessage,
                 decodeToStringValues
             )
@@ -656,8 +707,7 @@ class FixNgCodecTest {
     private fun decodeTestDirty(
         rawMessageString: String,
         delimiter: Char,
-        expectedErrorText: String? = null,
-        expectedSecondErrorText: String? = null,
+        expectedErrors: List<String> = emptyList(),
         expectedMessage: ParsedMessage = parsedMessage,
         decodeValuesToStrings: Boolean = false
     ) {
@@ -674,7 +724,7 @@ class FixNgCodecTest {
         val parsedMessage = decodedGroup.messages.single() as ParsedMessage
 
         // we don't validate `CheckSum` and `BodyLength` in incorrect messages
-        val fieldsToIgnore = if (expectedErrorText == null) emptyArray() else arrayOf("trailer.CheckSum", "header.BodyLength")
+        val fieldsToIgnore = if (expectedErrors.isEmpty()) emptyArray() else arrayOf("trailer.CheckSum", "header.BodyLength")
         val expected = if (decodeValuesToStrings) convertValuesToString(expectedBody) else expectedBody
 
         assertThat(parsedMessage.body)
@@ -682,16 +732,23 @@ class FixNgCodecTest {
             .ignoringFields(*fieldsToIgnore)
             .isEqualTo(expected)
 
-        if (expectedErrorText == null) {
+        if (expectedErrors.isEmpty()) {
             assertThat(reportingContext.warnings).isEmpty()
         } else {
-            if (expectedSecondErrorText == null) {
-                assertThat(reportingContext.warnings.single()).startsWith(DIRTY_MODE_WARNING_PREFIX + expectedErrorText)
-            } else {
-                assertThat(reportingContext.warnings).size().isEqualTo(2)
-                assertThat(reportingContext.warnings[0]).startsWith(DIRTY_MODE_WARNING_PREFIX + expectedErrorText)
-                assertThat(reportingContext.warnings[1]).startsWith(DIRTY_MODE_WARNING_PREFIX + expectedSecondErrorText)
-            }
+            assertAll(
+                (0 until max(expectedErrors.size, reportingContext.warnings.size)).asSequence()
+                    .map { index ->
+                        Executable {
+                            val expected = expectedErrors.getOrNull(index)
+                            val actual = reportingContext.warnings.getOrNull(index)
+                            assertNotNull(expected) { "No expected text for actual warning[$index] '$actual'" }
+                            assertNotNull(actual) { "No actual warning for expected text[$index] '$expected'" }
+                            assertThat(actual).describedAs {
+                                "Expected text doesn't match to actual warning, index: $index"
+                            }.startsWith(DIRTY_MODE_WARNING_PREFIX + expected)
+                        }
+                    }.toList<Executable>()
+            )
         }
     }
 
@@ -911,6 +968,7 @@ class FixNgCodecTest {
         private const val DIRTY_MODE_WARNING_PREFIX = "Dirty mode WARNING: "
 
         private const val MSG_CORRECT = "8=FIXT.1.19=29535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
+        private const val MSG_WITH_0_PREFIX = "08=FIXT.1.109=295035=849=SENDER56=RECEIVER034=1094752=20230419-10:36:07.41508817=495504662011=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=80453=20448=NGALL1FX01447=D0452=76448=00447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.000008010=191"
         private const val MSG_CORRECT_WITHOUT_BODY = "8=FIX.4.29=5535=034=12549=MZHOT052=20240801-08:03:01.22956=INET10=039"
         private const val MSG_ADDITIONAL_FIELD_DICT = "8=FIXT.1.19=30535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.000008461=1234510=143"
         private const val MSG_ADDITIONAL_FIELD_NO_DICT = "8=FIXT.1.19=30535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.0000089999=5432110=097"
