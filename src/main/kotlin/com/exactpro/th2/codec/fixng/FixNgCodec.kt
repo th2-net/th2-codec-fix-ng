@@ -43,6 +43,7 @@ import java.time.temporal.ChronoField
 import java.util.EnumMap
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.Message as CommonMessage
 
+@Suppress("RemoveRedundantQualifierName")
 class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings) : IPipelineCodec {
     private val beginString = settings.beginString
     private val charset = settings.charset
@@ -155,10 +156,10 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 // this should never happen in dirty mode
                 val errorMessage = if (isDirty) {
                     "Field was not processed in dirty mode. Tag: ${
-                        buffer.readTag { handleError(isDirty, context,it)}
+                        buffer.readTag { handleError(true, context,it)}
                     }"
                 } else {
-                    "Tag appears out of order: ${buffer.readTag { handleError(isDirty, context, it) }}"
+                    "Tag appears out of order: ${buffer.readTag { handleError(false, context, it) }}"
                 }
                 error(errorMessage)
             }
