@@ -286,7 +286,8 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     ): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
         val tagsSet: MutableSet<Int> = hashSetOf(*preparedHeaderTags)
         val usedComponents = mutableSetOf<String>()
-        val isNextPartTag: (tag: Int) -> Boolean = { tag ->
+        // then next lambda is used to detect is processed tag related to one of the next message parts
+        val isTagFromNextPart: (tag: Int) -> Boolean = { tag ->
             when (this) {
                 headerDef -> bodyDef[tag] ?: trailerDef[tag]
                 trailerDef -> null
@@ -297,7 +298,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         source.forEachField(
             decodeDelimiter, charset, isDirty,
             { tag, warn ->
-                if (isNextPartTag(tag)) {
+                // codec checks if the tag belongs to the currently processing part
+                // if it does not, codec prints the warning into the logs
+                if (isTagFromNextPart(tag)) {
                     LOGGER.warn { "Tag ($tag) reading problem: $warn" }
                 } else {
                     handleError(isDirty, context, warn)
@@ -305,7 +308,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             }
         ) { tag, value ->
             val field = get(tag) ?: if (isDirty) {
-                if (isNextPartTag(tag)) { return@forEachField false } // we reached next part of the message
+                if (isTagFromNextPart(tag)) { return@forEachField false } // we reached next part of the message
 
                 val dictField = dictionaryFields[tag]
                 if (dictField != null) {
@@ -401,6 +404,8 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         source.forEachField(
             decodeDelimiter, charset, isDirty,
             { tag, warn ->
+                // codec checks if the tag belongs to the currently processing part
+                // if it does not, codec prints the warning into the logs
                 if (get(tag) == null) {
                     LOGGER.warn { "Tag ($tag) reading problem: $warn" }
                 } else {
