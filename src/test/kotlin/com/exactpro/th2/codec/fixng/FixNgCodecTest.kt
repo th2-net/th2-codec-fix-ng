@@ -317,12 +317,6 @@ class FixNgCodecTest {
                     "Tag with zero prefix at offset: 215, raw: '...0452=76${delimiter}44...'",
                     "Tag with zero prefix at offset: 229, raw: '...0447=P${delimiter}452...'",
                     "Tag with zero prefix at offset: 321, raw: '...010=100${delimiter}'",
-                    "Tag with zero prefix at offset: 321, raw: '...010=100${delimiter}'",
-                    "Tag with zero prefix at offset: 321, raw: '...010=100${delimiter}'", // FIXME: exclude the duplicate warning for 10 tag
-                    // Warning for CheckSum field happens several times because it is read several times:
-                    // * at the end of body decoding
-                    // * at the trailer decoding
-                    // * at the checksum validation
                 ),
             )
         }
