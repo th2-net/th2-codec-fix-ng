@@ -132,17 +132,17 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
             val beginString = buffer.readField(
                 TAG_BEGIN_STRING, decodeDelimiter, charset, isDirty,
-                { handleError(isDirty, context, it) },
+                { _, warn -> handleError(isDirty, context, warn) },
             ) { "Message starts with $it tag instead of BeginString ($TAG_BEGIN_STRING)" }
             val bodyLengthString = buffer.readField(
                 TAG_BODY_LENGTH, decodeDelimiter, charset, isDirty,
-                { handleError(isDirty, context, it) },
+                { _, warn -> handleError(isDirty, context, warn) },
             ) { "BeginString ($TAG_BEGIN_STRING) is followed by $it tag instead of BodyLength ($TAG_BODY_LENGTH)" }
             val bodyLength = bodyLengthString.toIntOrNull() ?: handleError(isDirty, context, "Wrong number value in integer field 'BodyLength'. Value: $bodyLengthString.", bodyLengthString)
             validateBodyLength(isDirty, context, buffer, buffer.readerIndex(), bodyLength)
             val msgType = buffer.readField(
                 TAG_MSG_TYPE, decodeDelimiter, charset, isDirty,
-                { handleError(isDirty, context, it) }
+                { _, warn -> handleError(isDirty, context, warn) }
             ) { "BodyLength ($TAG_BODY_LENGTH) is followed by $it tag instead of MsgType ($TAG_MSG_TYPE)" }
             val messageDef = messagesByTypeForDecode[msgType] ?: error("Unknown message type: $msgType")
 
@@ -154,10 +154,10 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 // this should never happen in dirty mode
                 val errorMessage = if (isDirty) {
                     "Field was not processed in dirty mode. Tag: ${
-                        buffer.readTag { handleError(true, context,it)}
+                        buffer.readTag { _, warn -> handleError(true, context, warn)}
                     }"
                 } else {
-                    "Tag appears out of order: ${buffer.readTag { handleError(false, context, it) }}"
+                    "Tag appears out of order: ${buffer.readTag { _, warn -> handleError(false, context, warn) }}"
                 }
                 error(errorMessage)
             }
@@ -216,7 +216,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         val index = buffer.readerIndex()
         try {
             buffer.readerIndex(endBodyLengthOffset + bodyLength)
-            val tag = buffer.readTag { LOGGER.warn { "Last tag reading problem: $it" } }
+            val tag = buffer.readTag { tag, warn -> { LOGGER.warn { "Tag ($tag) reading problem: $warn" } } }
             if (tag != TAG_CHECKSUM) {
                 handleError(
                     isDirty, context,
@@ -277,20 +277,35 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
     private val preparedHeaderTags = arrayOf(TAG_BEGIN_STRING, TAG_BODY_LENGTH, TAG_MSG_TYPE)
 
-    private fun Message.decode(source: ByteBuf, bodyDef: Message, isDirty: Boolean, dictionaryFields: Map<Int, Field>, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
+    private fun Message.decode(
+        source: ByteBuf,
+        bodyDef: Message,
+        isDirty: Boolean,
+        dictionaryFields: Map<Int, Field>,
+        context: IReportingContext
+    ): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
         val tagsSet: MutableSet<Int> = hashSetOf(*preparedHeaderTags)
         val usedComponents = mutableSetOf<String>()
+        val isNextPartTag: (tag: Int) -> Boolean = { tag ->
+            when (this) {
+                headerDef -> bodyDef[tag] ?: trailerDef[tag]
+                trailerDef -> null
+                else -> trailerDef[tag]
+            } != null
+        }
 
         source.forEachField(
             decodeDelimiter, charset, isDirty,
-            { handleError(isDirty, context, it) }
+            { tag, warn ->
+                if (isNextPartTag(tag)) {
+                    LOGGER.warn { "Tag ($tag) reading problem: $warn" }
+                } else {
+                    handleError(isDirty, context, warn)
+                }
+            }
         ) { tag, value ->
             val field = get(tag) ?: if (isDirty) {
-                when (this) {
-                    headerDef -> bodyDef[tag] ?: trailerDef[tag]
-                    trailerDef -> null
-                    else -> trailerDef[tag]
-                }?.let { return@forEachField false } // we reached next part of the message
+                if (isNextPartTag(tag)) { return@forEachField false } // we reached next part of the message
 
                 val dictField = dictionaryFields[tag]
                 if (dictField != null) {
@@ -385,7 +400,13 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
         source.forEachField(
             decodeDelimiter, charset, isDirty,
-            { handleError(isDirty, context, it) }
+            { tag, warn ->
+                if (get(tag) == null) {
+                    LOGGER.warn { "Tag ($tag) reading problem: $warn" }
+                } else {
+                    handleError(isDirty, context, warn)
+                }
+            }
         ) { tag, value ->
             val field = get(tag) ?: return@forEachField false
 
