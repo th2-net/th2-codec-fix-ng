@@ -5,7 +5,7 @@ jmh = "1.37"
 
 [libraries]
 th2-common = { group = "com.exactpro.th2", name = "common", version = "5.15.0-dev" }
-th2-codec = { group = "com.exactpro.th2", name = "codec", version = "5.6.0-distinct-warning-14311375707-922ecfd-SNAPSHOT" }
+th2-codec = { group = "com.exactpro.th2", name = "codec", version = "5.5.0-dev" }
 
 sailfish-common = { group = "com.exactpro.sf", name = "sailfish-common", version = "3.4.260" }
 
