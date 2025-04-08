@@ -25,6 +25,10 @@ const val SEP_BYTE = '='.code.toByte()
 const val DIGIT_0 = '0'.code.toByte()
 const val DIGIT_9 = '9'.code.toByte()
 
+const val SOH_CHAR = ''
+const val SOH_BYTE = SOH_CHAR.code.toByte()
+
+@Suppress("KotlinConstantConditions")
 private fun Int.getDigitCount(): Int = when {
     this < 10 -> 1
     this < 100 -> 2
@@ -140,11 +144,19 @@ fun ByteBuf.writeField(tag: Int, value: Any?, delimiter: Byte, charset: Charset)
     writeField(tag, value.toString(), delimiter, charset)
 
 fun ByteBuf.writeChecksum(delimiter: Byte) {
+    val checksum = calculateChecksum(delimiter)
+    writeTag(10).printInt(checksum, 3).writeByte(delimiter.toInt())
+}
+
+fun ByteBuf.calculateChecksum(delimiter: Byte): Int {
     val index = readerIndex()
     var checksum = 0
-    while (isReadable) checksum += readByte()
+    while (isReadable) {
+        val value = readByte()
+        checksum += if (value == delimiter) SOH_BYTE else value
+    }
     readerIndex(index)
-    writeTag(10).printInt(checksum % 256, 3).writeByte(delimiter.toInt())
+    return checksum % 256
 }
 
 fun ByteBuf.getLastTagIndex(delimiter: Byte): Int {
