@@ -41,6 +41,7 @@ import java.math.BigDecimal
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.LocalDateTime
+import kotlin.collections.set
 import kotlin.math.max
 
 class FixNgCodecTest {
@@ -79,28 +80,149 @@ class FixNgCodecTest {
 
     @ParameterizedTest
     @ValueSource(chars = ['', '|'])
-    fun `tags with 0 prefix decode (dirty)`(delimiter: Char) =
+    fun `body length is not int decode (dirty)`(delimiter: Char) {
+        with(parsedMessage) {
+            (body map "header").set("BodyLength", VALUE_NOT_INT_BODY_LENGTH)
+            decodeTest(
+                MSG_WITH_NOT_INT_BODY_LENGTH,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf(
+                    "Wrong number value in integer field 'BodyLength'. Value: $VALUE_NOT_INT_BODY_LENGTH.",
+                )
+            )
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `body length is not int decode (not dirty)`(delimiter: Char) {
         decodeTest(
-            MSG_WITH_0_PREFIX,
-            dirtyMode = true,
+            MSG_WITH_NOT_INT_BODY_LENGTH,
+            dirtyMode = false,
             delimiter = delimiter,
             expectedErrors = listOf(
-                "Tag with zero prefix at offset: 0, raw: '08=FIXT.1....'",
-                "Tag with zero prefix at offset: 12, raw: '...09=295${delimiter}035...'",
-                "Tag with zero prefix at offset: 19, raw: '...035=8${delimiter}49=S...'",
-                "Tag with zero prefix at offset: 47, raw: '...034=10947${delimiter}...'",
-                "Tag with zero prefix at offset: 98, raw: '...011=zSuNbr...'",
-                "Tag with zero prefix at offset: 186, raw: '...0453=2${delimiter}044...'",
-                "Tag with zero prefix at offset: 193, raw: '...0448=NGALL...'",
-                "Tag with zero prefix at offset: 215, raw: '...0452=76${delimiter}44...'",
-                "Tag with zero prefix at offset: 229, raw: '...0447=P${delimiter}452...'",
-                "Tag with zero prefix at offset: 321, raw: '...010=191${delimiter}'",
-                "Tag with zero prefix at offset: 321, raw: '...010=191${delimiter}'",
-                // CheckSum is duplicated because it is read two times:
-                // * at the end of body decoding
-                // * at the trailer decoding
-            ),
+                "Wrong number value in integer field 'BodyLength'. Value: $VALUE_NOT_INT_BODY_LENGTH.",
+            )
         )
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `body length less zero decode (dirty)`(delimiter: Char) {
+        with(parsedMessage) {
+            (body map "header").set("BodyLength", VALUE_BODY_LENGTH_LESS_ZERO)
+            decodeTest(
+                MSG_WITH_BODY_LENGTH_LESS_ZERO,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf(
+                    "BodyLength (9) field must have positive or zero value instead of $VALUE_BODY_LENGTH_LESS_ZERO",
+                )
+            )
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `body length less zero decode (not dirty)`(delimiter: Char) {
+        decodeTest(
+            MSG_WITH_BODY_LENGTH_LESS_ZERO,
+            dirtyMode = false,
+            delimiter = delimiter,
+            expectedErrors = listOf(
+                "BodyLength (9) field must have positive or zero value instead of $VALUE_BODY_LENGTH_LESS_ZERO",
+            )
+        )
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `body length greater real body decode (dirty)`(delimiter: Char) {
+        with(parsedMessage) {
+            (body map "header").set("BodyLength", VALUE_BODY_LENGTH_GREATER_REAL_BODY)
+            decodeTest(
+                MSG_WITH_BODY_LENGTH_GREATER_REAL_BODY,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf(
+                    "BodyLength (9) field value $VALUE_BODY_LENGTH_GREATER_REAL_BODY is grater than real message body 295",
+                )
+            )
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `body length greater real body decode (not dirty)`(delimiter: Char) {
+        decodeTest(
+            MSG_WITH_BODY_LENGTH_GREATER_REAL_BODY,
+            dirtyMode = false,
+            delimiter = delimiter,
+            expectedErrors = listOf(
+                "BodyLength (9) field value $VALUE_BODY_LENGTH_GREATER_REAL_BODY is grater than real message body 295",
+            )
+        )
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `no checksum after body decode (dirty)`(delimiter: Char) {
+        with(parsedMessage) {
+            (body map "header").set("BodyLength", VALUE_NO_CHECKSUM_AFTER_BODY)
+            decodeTest(
+                MSG_WITH_NO_CHECKSUM_AFTER_BODY,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf(
+                    "BodyLength (9) must forward to the CheckSum (10) instead of 60 tag",
+                )
+            )
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `no checksum after body decode (not dirty)`(delimiter: Char) {
+        decodeTest(
+            MSG_WITH_NO_CHECKSUM_AFTER_BODY,
+            dirtyMode = false,
+            delimiter = delimiter,
+            expectedErrors = listOf(
+                "BodyLength (9) must forward to the CheckSum (10) instead of 60 tag",
+            )
+        )
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `tags with 0 prefix decode (dirty)`(delimiter: Char) {
+        with(parsedMessage) {
+            (body map "header").set("BodyLength", 302)
+            decodeTest(
+                MSG_WITH_0_PREFIX,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf(
+                    "Tag with zero prefix at offset: 0, raw: '08=FIXT.1....'",
+                    "Tag with zero prefix at offset: 12, raw: '...09=302${delimiter}035...'",
+                    "Tag with zero prefix at offset: 19, raw: '...035=8${delimiter}49=S...'",
+                    "Tag with zero prefix at offset: 47, raw: '...034=10947${delimiter}...'",
+                    "Tag with zero prefix at offset: 98, raw: '...011=zSuNbr...'",
+                    "Tag with zero prefix at offset: 186, raw: '...0453=2${delimiter}044...'",
+                    "Tag with zero prefix at offset: 193, raw: '...0448=NGALL...'",
+                    "Tag with zero prefix at offset: 215, raw: '...0452=76${delimiter}44...'",
+                    "Tag with zero prefix at offset: 229, raw: '...0447=P${delimiter}452...'",
+                    "Tag with zero prefix at offset: 321, raw: '...010=191${delimiter}'",
+                ),
+            )
+        }
+    }
 
     @ParameterizedTest
     @ValueSource(chars = ['', '|'])
@@ -142,13 +264,18 @@ class FixNgCodecTest {
     @ParameterizedTest
     @ValueSource(chars = ['', '|'])
     fun `decode with addition field that exists in dictionary (dirty)`(delimiter: Char) {
-        parsedBody["CFICode"] = "12345"
-        decodeTest(
-            MSG_ADDITIONAL_FIELD_DICT,
-            dirtyMode = true,
-            delimiter = delimiter,
-            expectedErrors = listOf("Unexpected field in message. Field name: CFICode. Field value: 12345."),
-        )
+        with(parsedMessage) {
+            body.set("CFICode", "12345")
+            (body map "header").set("BodyLength", 305)
+            (body map "trailer").set("CheckSum", "143")
+            decodeTest(
+                MSG_ADDITIONAL_FIELD_DICT,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf("Unexpected field in message. Field name: CFICode. Field value: 12345."),
+            )
+        }
     }
 
     @ParameterizedTest
@@ -178,13 +305,18 @@ class FixNgCodecTest {
     @ParameterizedTest
     @ValueSource(chars = ['', '|'])
     fun `decode with addition field that does not exists in dictionary (dirty)`(delimiter: Char) {
-        parsedBody["9999"] = "54321"
-        decodeTest(
-            MSG_ADDITIONAL_FIELD_NO_DICT,
-            dirtyMode = true,
-            delimiter = delimiter,
-            expectedErrors = listOf("Field does not exist in dictionary. Field tag: 9999. Field value: 54321."),
-        )
+        with(parsedMessage) {
+            body.set("9999", "54321")
+            (body map "header").set("BodyLength", 306)
+            (body map "trailer").set("CheckSum", "097")
+            decodeTest(
+                MSG_ADDITIONAL_FIELD_NO_DICT,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf("Field does not exist in dictionary. Field tag: 9999. Field value: 54321."),
+            )
+        }
     }
 
     @ParameterizedTest
@@ -234,13 +366,19 @@ class FixNgCodecTest {
     @ParameterizedTest
     @MethodSource("configs")
     fun `decode with required field removed`(isDirty: Boolean, delimiter: Char) {
-        parsedBody.remove("ExecID")
-        decodeTest(
-            MSG_REQUIRED_FIELD_REMOVED,
-            dirtyMode = isDirty,
-            delimiter = delimiter,
-            expectedErrors = listOf("Required tag missing. Tag: 17."),
-        )
+        with(parsedMessage) {
+            body remove "ExecID"
+            (body map "header").set("BodyLength", 282)
+            (body map "trailer").set("CheckSum", "060")
+            parsedBody.remove("ExecID")
+            decodeTest(
+                MSG_REQUIRED_FIELD_REMOVED,
+                dirtyMode = isDirty,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf("Required tag missing. Tag: 17."),
+            )
+        }
     }
 
     @ParameterizedTest
@@ -259,14 +397,18 @@ class FixNgCodecTest {
     @ParameterizedTest
     @MethodSource("configs")
     fun `decode with required delimiter field in group removed in first entry`(isDirty: Boolean, delimiter: Char) {
-        @Suppress("UNCHECKED_CAST")
-        ((parsedBody["TradingParty"] as Map<String, Any>)["NoPartyIDs"] as List<MutableMap<String, Any>>)[0].remove("PartyID")
-        decodeTest(
-            MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_FIRST_ENTRY,
-            dirtyMode = isDirty,
-            delimiter = delimiter,
-            expectedErrors = listOf("Field PartyIDSource (447) appears before delimiter (448)")
-        )
+        with(parsedMessage) {
+            body map "TradingParty" list "NoPartyIDs" map 0 remove "PartyID"
+            (body map "header").set("BodyLength", 280)
+            (body map "trailer").set("CheckSum", "061")
+            decodeTest(
+                MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_FIRST_ENTRY,
+                dirtyMode = isDirty,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf("Field PartyIDSource (447) appears before delimiter (448)")
+            )
+        }
     }
 
     @ParameterizedTest
@@ -285,14 +427,18 @@ class FixNgCodecTest {
     @ParameterizedTest
     @MethodSource("configs")
     fun `decode with required delimiter field in group removed in second entry`(isDirty: Boolean, delimiter: Char) {
-        @Suppress("UNCHECKED_CAST")
-        ((parsedBody["TradingParty"] as Map<String, Any>)["NoPartyIDs"] as List<MutableMap<String, Any>>)[1].remove("PartyID")
-        decodeTest(
-            MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_SECOND_ENTRY,
-            dirtyMode = isDirty,
-            delimiter = delimiter,
-            expectedErrors = listOf("Field PartyIDSource (447) appears before delimiter (448)"),
-        )
+        with(parsedMessage) {
+            body map "TradingParty" list "NoPartyIDs" map 1 remove "PartyID"
+            (body map "header").set("BodyLength", 289)
+            (body map "trailer").set("CheckSum", "180")
+            decodeTest(
+                MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_SECOND_ENTRY,
+                dirtyMode = isDirty,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf("Field PartyIDSource (447) appears before delimiter (448)"),
+            )
+        }
     }
 
     @ParameterizedTest
@@ -305,13 +451,17 @@ class FixNgCodecTest {
     @ParameterizedTest
     @MethodSource("configs")
     fun `decode with wrong enum value`(isDirty: Boolean, delimiter: Char) {
-        parsedBody["ExecType"] = 'X'
-        decodeTest(
-            MSG_WRONG_ENUM,
-            dirtyMode = isDirty,
-            delimiter = delimiter,
-            expectedErrors = listOf("Invalid value in enum field ExecType. Actual: X."),
-        )
+        with(parsedMessage) {
+            body.set("ExecType", 'X')
+            (body map "trailer").set("CheckSum", "231")
+            decodeTest(
+                MSG_WRONG_ENUM,
+                dirtyMode = isDirty,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf("Invalid value in enum field ExecType. Actual: X."),
+            )
+        }
     }
 
     @ParameterizedTest
@@ -343,13 +493,18 @@ class FixNgCodecTest {
     @ParameterizedTest
     @MethodSource("configs")
     fun `decode with wrong value type`(isDirty: Boolean, delimiter: Char) {
-        parsedBody["LeavesQty"] = "Five"
-        decodeTest(
-            MSG_WRONG_TYPE,
-            dirtyMode = isDirty,
-            delimiter = delimiter,
-            expectedErrors = listOf("Wrong number value in java.math.BigDecimal field 'LeavesQty'. Value: Five."),
-        )
+        with(parsedMessage) {
+            body.set("LeavesQty", "Five")
+            (body map "header").set("BodyLength", 296)
+            (body map "trailer").set("CheckSum", "181")
+            decodeTest(
+                MSG_WRONG_TYPE,
+                dirtyMode = isDirty,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf("Wrong number value in java.math.BigDecimal field 'LeavesQty'. Value: Five."),
+            )
+        }
     }
 
     @ParameterizedTest
@@ -362,13 +517,18 @@ class FixNgCodecTest {
     @ParameterizedTest
     @ValueSource(chars = ['', '|'])
     fun `decode with empty value (dirty)`(delimiter: Char) {
-        parsedBody["Account"] = ""
-        decodeTest(
-            MSG_EMPTY_VAL,
-            dirtyMode = true,
-            delimiter = delimiter,
-            expectedErrors = listOf("Empty value in the field 'Account'.")
-        )
+        with(parsedMessage) {
+            body.set("Account", "")
+            (body map "header").set("BodyLength", 291)
+            (body map "trailer").set("CheckSum", "251")
+            decodeTest(
+                MSG_EMPTY_VAL,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf("Empty value in the field 'Account'.")
+            )
+        }
     }
 
     @ParameterizedTest
@@ -398,13 +558,18 @@ class FixNgCodecTest {
     @ParameterizedTest
     @MethodSource("configs")
     fun `decode with non printable characters`(isDirty: Boolean, delimiter: Char) {
-        parsedBody["Account"] = "test\taccount"
-        decodeTest(
-            MSG_NON_PRINTABLE,
-            dirtyMode = isDirty,
-            delimiter = delimiter,
-            expectedErrors = listOf("Non printable characters in the field 'Account'."),
-        )
+        with(parsedMessage) {
+            body.set("Account", "test\taccount")
+            (body map "header").set("BodyLength", 303)
+            (body map "trailer").set("CheckSum", "171")
+            decodeTest(
+                MSG_NON_PRINTABLE,
+                dirtyMode = isDirty,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf("Non printable characters in the field 'Account'."),
+            )
+        }
     }
 
     @ParameterizedTest
@@ -435,15 +600,19 @@ class FixNgCodecTest {
     @ParameterizedTest
     @ValueSource(chars = ['', '|'])
     fun `tag appears out of order (dirty)`(delimiter: Char) {
-        @Suppress("UNCHECKED_CAST")
-        val trailer = parsedBody["trailer"] as MutableMap<String, Any>
-        trailer["LegUnitOfMeasure"] = "500"
-        decodeTest(
-            MSG_TAG_OUT_OF_ORDER,
-            dirtyMode = true,
-            delimiter = delimiter,
-            expectedErrors = listOf("Unexpected field in message. Field name: LegUnitOfMeasure. Field value: 500"),
-        )
+        with(parsedMessage) {
+            body remove "OuterComponent"
+            (body map "trailer").set("LegUnitOfMeasure", "500")
+            (body map "header").set("BodyLength", 295)
+            (body map "trailer").set("CheckSum", "000")
+            decodeTest(
+                MSG_TAG_OUT_OF_ORDER,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf("Unexpected field in message. Field name: LegUnitOfMeasure. Field value: 500"),
+            )
+        }
     }
 
     @ParameterizedTest
@@ -470,28 +639,34 @@ class FixNgCodecTest {
     @ParameterizedTest
     @MethodSource("configs")
     fun `decode with missing req field in req nested component`(isDirty: Boolean, delimiter: Char) {
-        @Suppress("UNCHECKED_CAST")
-        (parsedBodyWithNestedComponents["OuterComponent"] as MutableMap<String, MutableMap<String, Any>>)["InnerComponent"]?.remove("OrdType")
-        decodeTest(
-            MSG_NESTED_REQ_COMPONENTS_MISSED_REQ,
-            dirtyMode = isDirty,
-            delimiter = delimiter,
-            expectedErrors = listOf("Required tag missing. Tag: 40."),
-            expectedMessage = parsedMessageWithNestedComponents
-        )
+        with(parsedMessageWithNestedComponents) {
+            body map "OuterComponent" map "InnerComponent" remove "OrdType"
+            (body map "header").set("BodyLength", 54)
+            (body map "trailer").set("CheckSum", "191")
+            decodeTest(
+                MSG_NESTED_REQ_COMPONENTS_MISSED_REQ,
+                dirtyMode = isDirty,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf("Required tag missing. Tag: 40."),
+            )
+        }
     }
 
     @ParameterizedTest
     @MethodSource("configs")
     fun `decode with missing optional field in req nested component`(isDirty: Boolean, delimiter: Char) {
-        @Suppress("UNCHECKED_CAST")
-        (parsedBodyWithNestedComponents["OuterComponent"] as MutableMap<String, MutableMap<String, Any>>)["InnerComponent"]?.remove("Text")
-        decodeTest(
-            MSG_NESTED_REQ_COMPONENTS_MISSED_OPTIONAL,
-            dirtyMode = isDirty,
-            delimiter = delimiter,
-            expectedMessage = parsedMessageWithNestedComponents
-        )
+        with(parsedMessageWithNestedComponents) {
+            body map "OuterComponent" map "InnerComponent" remove "Text"
+            (body map "header").set("BodyLength", 49)
+            (body map "trailer").set("CheckSum", "191")
+            decodeTest(
+                MSG_NESTED_REQ_COMPONENTS_MISSED_OPTIONAL,
+                dirtyMode = isDirty,
+                delimiter = delimiter,
+                expectedMessage = this,
+            )
+        }
     }
 
     private fun convertToOptionalComponent(): ParsedMessage {
@@ -512,61 +687,69 @@ class FixNgCodecTest {
     @ParameterizedTest
     @MethodSource("configs")
     fun `decode with missing req field in opt nested component`(isDirty: Boolean, delimiter: Char) {
-        val message = convertToOptionalComponent()
-        @Suppress("UNCHECKED_CAST")
-        (parsedBodyWithNestedComponents["OuterComponent"] as MutableMap<String, MutableMap<String, Any>>)["InnerComponent"]?.remove("OrdType")
-        decodeTest(
-            MSG_NESTED_OPT_COMPONENTS_MISSED_REQ,
-            dirtyMode = isDirty,
-            delimiter = delimiter,
-            expectedErrors = listOf("Required tag missing. Tag: 40."),
-            expectedMessage = message
-        )
+        with(convertToOptionalComponent()) {
+            body map "OuterComponent" map "InnerComponent" remove "OrdType"
+            (body map "header").set("BodyLength", 54)
+            (body map "trailer").set("CheckSum", "191")
+            decodeTest(
+                MSG_NESTED_OPT_COMPONENTS_MISSED_REQ,
+                dirtyMode = isDirty,
+                delimiter = delimiter,
+                expectedErrors = listOf("Required tag missing. Tag: 40."),
+                expectedMessage = this
+            )
+        }
     }
 
     @ParameterizedTest
     @MethodSource("configs")
     fun `decode with missing all fields in opt nested component`(isDirty: Boolean, delimiter: Char) {
-        val message = convertToOptionalComponent()
-        @Suppress("UNCHECKED_CAST")
-        (parsedBodyWithNestedComponents["OuterComponent"] as MutableMap<String, MutableMap<String, Any>>).remove("InnerComponent")
-        decodeTest(
-            MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS,
-            dirtyMode = isDirty,
-            delimiter = delimiter,
-            expectedErrors = listOf("Required tag missing. Tag: 40."),
-            expectedMessage = message
-        )
+        with(convertToOptionalComponent()) {
+            body map "OuterComponent" remove "InnerComponent"
+            (body map "header").set("BodyLength", 44)
+            (body map "trailer").set("CheckSum", "191")
+            decodeTest(
+                MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS,
+                dirtyMode = isDirty,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf("Required tag missing. Tag: 40.")
+            )
+        }
     }
 
     @ParameterizedTest
     @MethodSource("configs")
     fun `decode with missing all fields in inner and outer nested components`(isDirty: Boolean, delimiter: Char) {
-        val message = convertToOptionalComponent()
-        parsedBodyWithNestedComponents.remove("OuterComponent")
-        decodeTest(
-            MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS_INNER_AND_OUTER,
-            dirtyMode = isDirty,
-            delimiter = delimiter,
-            expectedMessage = message
-        )
+        with(convertToOptionalComponent()) {
+            body remove "OuterComponent"
+            (body map "header").set("BodyLength", 35)
+            (body map "trailer").set("CheckSum", "191")
+            decodeTest(
+                MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS_INNER_AND_OUTER,
+                dirtyMode = isDirty,
+                delimiter = delimiter,
+                expectedMessage = this
+            )
+        }
     }
 
     @ParameterizedTest
     @MethodSource("configs")
     fun `decode with missing req fields in both inner and outer components`(isDirty: Boolean, delimiter: Char) {
-        val message = convertToOptionalComponent()
-        @Suppress("UNCHECKED_CAST")
-        (parsedBodyWithNestedComponents["OuterComponent"] as MutableMap<String, MutableMap<String, Any>>).remove("LeavesQty")
-        @Suppress("UNCHECKED_CAST")
-        (parsedBodyWithNestedComponents["OuterComponent"] as MutableMap<String, MutableMap<String, Any>>)["InnerComponent"]!!.remove("OrdType")
-        decodeTest(
-            MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_OUTER_FIELDS_AND_REQ_INNER_FIELD,
-            dirtyMode = isDirty,
-            delimiter = delimiter,
-            expectedErrors = listOf("Required tag missing. Tag: 40.", "Required tag missing. Tag: 151."),
-            expectedMessage = message,
-        )
+        with(convertToOptionalComponent()) {
+            body map "OuterComponent" remove "LeavesQty"
+            body map "OuterComponent" map "InnerComponent" remove "OrdType"
+            (body map "header").set("BodyLength", 45)
+            (body map "trailer").set("CheckSum", "191")
+            decodeTest(
+                MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_OUTER_FIELDS_AND_REQ_INNER_FIELD,
+                dirtyMode = isDirty,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf("Required tag missing. Tag: 40.", "Required tag missing. Tag: 151."),
+            )
+        }
     }
 
     @ParameterizedTest
@@ -723,13 +906,10 @@ class FixNgCodecTest {
         val decodedGroup = codec.decode(MessageGroup(listOf(rawMessage)), reportingContext)
         val parsedMessage = decodedGroup.messages.single() as ParsedMessage
 
-        // we don't validate `CheckSum` and `BodyLength` in incorrect messages
-        val fieldsToIgnore = if (expectedErrors.isEmpty()) emptyArray() else arrayOf("trailer.CheckSum", "header.BodyLength")
         val expected = if (decodeValuesToStrings) convertValuesToString(expectedBody) else expectedBody
 
         assertThat(parsedMessage.body)
             .usingRecursiveComparison()
-            .ignoringFields(*fieldsToIgnore)
             .isEqualTo(expected)
 
         if (expectedErrors.isEmpty()) {
@@ -889,7 +1069,7 @@ class FixNgCodecTest {
                     "OrdType" to '1' // 40
                 )
             ),
-            "trailer" to mapOf(
+            "trailer" to mutableMapOf(
                 "CheckSum" to "191"
             )
         )
@@ -964,14 +1144,34 @@ class FixNgCodecTest {
         )
     )
 
+    @Suppress("UNCHECKED_CAST")
+    private infix fun Map<String, Any?>.map(name: String): Map<String, Any?> = get(name) as Map<String, Any?>
+    @Suppress("UNCHECKED_CAST")
+    private infix fun Map<String, Any?>.list(name: String): List<Any?> = get(name) as List<Any?>
+    @Suppress("UNCHECKED_CAST")
+    private infix fun Map<String, Any?>.remove(name: String) { (this as MutableMap<String, Any?>).remove(name) }
+    @Suppress("UNCHECKED_CAST")
+    private fun Map<String, Any?>.set(name: String, value: Any) { (this as MutableMap<String, Any?>).put(name, value) }
+    @Suppress("UNCHECKED_CAST")
+    private infix fun List<Any?>.map(index: Int): Map<String, Any?> = get(index) as Map<String, Any?>
+
     companion object {
         private const val DIRTY_MODE_WARNING_PREFIX = "Dirty mode WARNING: "
 
+        private const val VALUE_NOT_INT_BODY_LENGTH = "abc"
+        private const val VALUE_BODY_LENGTH_LESS_ZERO = -10
+        private const val VALUE_BODY_LENGTH_GREATER_REAL_BODY = 999
+        private const val VALUE_NO_CHECKSUM_AFTER_BODY = 267
+
         private const val MSG_CORRECT = "8=FIXT.1.19=29535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
-        private const val MSG_WITH_0_PREFIX = "08=FIXT.1.109=295035=849=SENDER56=RECEIVER034=1094752=20230419-10:36:07.41508817=495504662011=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=80453=20448=NGALL1FX01447=D0452=76448=00447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.000008010=191"
+        private const val MSG_WITH_NOT_INT_BODY_LENGTH = "8=FIXT.1.19=$VALUE_NOT_INT_BODY_LENGTH35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
+        private const val MSG_WITH_BODY_LENGTH_LESS_ZERO = "8=FIXT.1.19=$VALUE_BODY_LENGTH_LESS_ZERO35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
+        private const val MSG_WITH_BODY_LENGTH_GREATER_REAL_BODY = "8=FIXT.1.19=$VALUE_BODY_LENGTH_GREATER_REAL_BODY35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
+        private const val MSG_WITH_NO_CHECKSUM_AFTER_BODY = "8=FIXT.1.19=$VALUE_NO_CHECKSUM_AFTER_BODY35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
+        private const val MSG_WITH_0_PREFIX = "08=FIXT.1.109=302035=849=SENDER56=RECEIVER034=1094752=20230419-10:36:07.41508817=495504662011=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=80453=20448=NGALL1FX01447=D0452=76448=00447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.000008010=191"
         private const val MSG_CORRECT_WITHOUT_BODY = "8=FIX.4.29=5535=034=12549=MZHOT052=20240801-08:03:01.22956=INET10=039"
         private const val MSG_ADDITIONAL_FIELD_DICT = "8=FIXT.1.19=30535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.000008461=1234510=143"
-        private const val MSG_ADDITIONAL_FIELD_NO_DICT = "8=FIXT.1.19=30535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.0000089999=5432110=097"
+        private const val MSG_ADDITIONAL_FIELD_NO_DICT = "8=FIXT.1.19=30635=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.0000089999=5432110=097"
         private const val MSG_ADDITIONAL_FIELD_TAG = "8=FIXT.1.19=30635=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.0000089999=1234510=217"
         private const val MSG_REQUIRED_FIELD_REMOVED = "8=FIXT.1.19=28235=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508811=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=060"
         private const val MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_FIRST_ENTRY = "8=FIXT.1.19=28035=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=061"
@@ -984,14 +1184,14 @@ class FixNgCodecTest {
         private const val MSG_TAG_OUT_OF_ORDER = "8=FIXT.1.19=29535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=000999=500"
 
         private const val MSG_NESTED_REQ_COMPONENTS = "8=FIXT.1.19=5935=TEST_149=MZHOT056=INET34=12558=text_140=1151=123410=191"
-        private const val MSG_NESTED_REQ_COMPONENTS_MISSED_REQ = "8=FIXT.1.19=5935=TEST_149=MZHOT056=INET34=12558=text_1151=123410=191"
-        private const val MSG_NESTED_REQ_COMPONENTS_MISSED_OPTIONAL = "8=FIXT.1.19=5935=TEST_149=MZHOT056=INET34=12540=1151=123410=191"
+        private const val MSG_NESTED_REQ_COMPONENTS_MISSED_REQ = "8=FIXT.1.19=5435=TEST_149=MZHOT056=INET34=12558=text_1151=123410=191"
+        private const val MSG_NESTED_REQ_COMPONENTS_MISSED_OPTIONAL = "8=FIXT.1.19=4935=TEST_149=MZHOT056=INET34=12540=1151=123410=191"
 
         private const val MSG_NESTED_OPT_COMPONENTS = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=12558=text_140=1151=123410=191"
-        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_REQ = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=12558=text_1151=123410=191"
-        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=125151=123410=191"
-        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS_INNER_AND_OUTER = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=12510=191"
-        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_OUTER_FIELDS_AND_REQ_INNER_FIELD = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=12558=text_110=191"
+        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_REQ = "8=FIXT.1.19=5435=TEST_249=MZHOT056=INET34=12558=text_1151=123410=191"
+        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS = "8=FIXT.1.19=4435=TEST_249=MZHOT056=INET34=125151=123410=191"
+        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS_INNER_AND_OUTER = "8=FIXT.1.19=3535=TEST_249=MZHOT056=INET34=12510=191"
+        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_OUTER_FIELDS_AND_REQ_INNER_FIELD = "8=FIXT.1.19=4535=TEST_249=MZHOT056=INET34=12558=text_110=191"
 
         private const val MSG_NESTED_GROUPS = "8=FIXT.1.19=8835=TEST_349=MZHOT056=INET34=12573=2398=3399=1399=2399=3398=3399=3399=2399=110=211"
         private const val MSG_TIME_ZONE = "8=FIXT.1.19=12335=TEST_449=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508860=20180205-10:38:08.000008449=20180205450=10:38:0810=206"

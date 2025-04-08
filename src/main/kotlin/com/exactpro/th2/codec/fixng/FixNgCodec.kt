@@ -32,6 +32,7 @@ import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.ParsedMess
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.RawMessage
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
+import mu.KotlinLogging
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -43,6 +44,7 @@ import java.time.temporal.ChronoField
 import java.util.EnumMap
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.Message as CommonMessage
 
+@Suppress("RemoveRedundantQualifierName")
 class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings) : IPipelineCodec {
     private val beginString = settings.beginString
     private val charset = settings.charset
@@ -130,16 +132,17 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
             val beginString = buffer.readField(
                 TAG_BEGIN_STRING, decodeDelimiter, charset, isDirty,
-                { handleError(isDirty, context, it) },
+                { _, warn -> handleError(isDirty, context, warn) },
             ) { "Message starts with $it tag instead of BeginString ($TAG_BEGIN_STRING)" }
             val bodyLengthString = buffer.readField(
                 TAG_BODY_LENGTH, decodeDelimiter, charset, isDirty,
-                { handleError(isDirty, context, it) },
+                { _, warn -> handleError(isDirty, context, warn) },
             ) { "BeginString ($TAG_BEGIN_STRING) is followed by $it tag instead of BodyLength ($TAG_BODY_LENGTH)" }
             val bodyLength = bodyLengthString.toIntOrNull() ?: handleError(isDirty, context, "Wrong number value in integer field 'BodyLength'. Value: $bodyLengthString.", bodyLengthString)
+            validateBodyLength(isDirty, context, buffer, buffer.readerIndex(), bodyLength)
             val msgType = buffer.readField(
                 TAG_MSG_TYPE, decodeDelimiter, charset, isDirty,
-                { handleError(isDirty, context, it) }
+                { _, warn -> handleError(isDirty, context, warn) }
             ) { "BodyLength ($TAG_BODY_LENGTH) is followed by $it tag instead of MsgType ($TAG_MSG_TYPE)" }
             val messageDef = messagesByTypeForDecode[msgType] ?: error("Unknown message type: $msgType")
 
@@ -151,10 +154,10 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 // this should never happen in dirty mode
                 val errorMessage = if (isDirty) {
                     "Field was not processed in dirty mode. Tag: ${
-                        buffer.readTag { handleError(isDirty, context,it)}
+                        buffer.readTag { _, warn -> handleError(true, context, warn)}
                     }"
                 } else {
-                    "Tag appears out of order: ${buffer.readTag { handleError(isDirty, context, it) }}"
+                    "Tag appears out of order: ${buffer.readTag { _, warn -> handleError(false, context, warn) }}"
                 }
                 error(errorMessage)
             }
@@ -177,6 +180,52 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         }
 
         return MessageGroup(messages)
+    }
+
+    /**
+     * Information about 'BodyLength' field from FIX specification:
+     * Message length, in bytes, forward to the CheckSum field.
+     * ALWAYS SECOND FIELD IN MESSAGE.
+     * (Always unencrypted)
+     */
+    private fun validateBodyLength(
+        isDirty: Boolean,
+        context: IReportingContext,
+        buffer: ByteBuf,
+        endBodyLengthOffset: Int,
+        bodyLength: Any
+    ) {
+        if (bodyLength !is Int) {
+            return
+        }
+        if (bodyLength < 0) {
+            handleError(
+                isDirty, context,
+                "BodyLength ($TAG_BODY_LENGTH) field must have positive or zero value instead of $bodyLength"
+            )
+            return
+        }
+        val realBodyLength = buffer.getLastTagIndex(decodeDelimiter) - buffer.readerIndex()
+        if (bodyLength > realBodyLength) {
+            handleError(
+                isDirty, context,
+                "BodyLength ($TAG_BODY_LENGTH) field value $bodyLength is grater than real message body $realBodyLength"
+            )
+            return
+        }
+        val index = buffer.readerIndex()
+        try {
+            buffer.readerIndex(endBodyLengthOffset + bodyLength)
+            val tag = buffer.readTag { tag, warn -> { LOGGER.warn { "Tag ($tag) reading problem: $warn" } } }
+            if (tag != TAG_CHECKSUM) {
+                handleError(
+                    isDirty, context,
+                    "BodyLength ($TAG_BODY_LENGTH) must forward to the CheckSum ($TAG_CHECKSUM) instead of $tag tag"
+                )
+            }
+        } finally {
+            buffer.readerIndex(index)
+        }
     }
 
     private fun handleError(isDirty: Boolean, context: IReportingContext, errorMessageText: String, value: Any = Unit) = if (isDirty) {
@@ -228,20 +277,38 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
     private val preparedHeaderTags = arrayOf(TAG_BEGIN_STRING, TAG_BODY_LENGTH, TAG_MSG_TYPE)
 
-    private fun Message.decode(source: ByteBuf, bodyDef: Message, isDirty: Boolean, dictionaryFields: Map<Int, Field>, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
+    private fun Message.decode(
+        source: ByteBuf,
+        bodyDef: Message,
+        isDirty: Boolean,
+        dictionaryFields: Map<Int, Field>,
+        context: IReportingContext
+    ): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
         val tagsSet: MutableSet<Int> = hashSetOf(*preparedHeaderTags)
         val usedComponents = mutableSetOf<String>()
+        // then next lambda is used to detect is processed tag related to one of the next message parts
+        val isTagFromNextPart: (tag: Int) -> Boolean = { tag ->
+            when (this) {
+                headerDef -> bodyDef[tag] ?: trailerDef[tag]
+                trailerDef -> null
+                else -> trailerDef[tag]
+            } != null
+        }
 
         source.forEachField(
             decodeDelimiter, charset, isDirty,
-            { handleError(isDirty, context, it) }
+            { tag, warn ->
+                // codec checks if the tag belongs to the currently processing part
+                // if it does not, codec prints the warning into the logs
+                if (isTagFromNextPart(tag)) {
+                    LOGGER.warn { "Tag ($tag) reading problem: $warn" }
+                } else {
+                    handleError(isDirty, context, warn)
+                }
+            }
         ) { tag, value ->
             val field = get(tag) ?: if (isDirty) {
-                when (this) {
-                    headerDef -> bodyDef[tag] ?: trailerDef[tag]
-                    trailerDef -> null
-                    else -> trailerDef[tag]
-                }?.let { return@forEachField false } // we reached next part of the message
+                if (isTagFromNextPart(tag)) { return@forEachField false } // we reached next part of the message
 
                 val dictField = dictionaryFields[tag]
                 if (dictField != null) {
@@ -336,7 +403,15 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
         source.forEachField(
             decodeDelimiter, charset, isDirty,
-            { handleError(isDirty, context, it) }
+            { tag, warn ->
+                // codec checks if the tag belongs to the currently processing part
+                // if it does not, codec prints the warning into the logs
+                if (get(tag) == null) {
+                    LOGGER.warn { "Tag ($tag) reading problem: $warn" }
+                } else {
+                    handleError(isDirty, context, warn)
+                }
+            }
         ) { tag, value ->
             val field = get(tag) ?: return@forEachField false
 
@@ -527,6 +602,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     ) : Field, FieldMap()
 
     companion object {
+        private val LOGGER = KotlinLogging.logger { }
         const val SOH_CHAR = ''
         private const val SOH_BYTE = SOH_CHAR.code.toByte()
 
@@ -536,6 +612,11 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         private const val ENCODE_MODE_PROPERTY_NAME = "encode-mode"
         private const val DIRTY_ENCODE_MODE = "dirty"
         private const val TAG_BEGIN_STRING = 8
+        /**
+         * Message length, in bytes, forward to the CheckSum
+         * field. ALWAYS SECOND FIELD IN MESSAGE.
+         * (Always unencrypted)
+         */
         private const val TAG_BODY_LENGTH = 9
         private const val TAG_CHECKSUM = 10
         private const val TAG_MSG_TYPE = 35

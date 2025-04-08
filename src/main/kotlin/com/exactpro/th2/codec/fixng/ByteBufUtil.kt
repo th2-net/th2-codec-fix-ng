@@ -51,7 +51,7 @@ private fun ByteBuf.printInt(sourceValue: Int, digits: Int = sourceValue.getDigi
     writerIndex(writerIndex() + digits)
 }
 
-inline fun ByteBuf.readTag(warningHandler: (String) -> Unit): Int {
+inline fun ByteBuf.readTag(warningHandler: (tag: Int, warning: String) -> Unit): Int {
     val offset = readerIndex()
     var tag = 0
     var zeroPrefix = false
@@ -67,7 +67,7 @@ inline fun ByteBuf.readTag(warningHandler: (String) -> Unit): Int {
         }
 
         return if (byte == SEP_BYTE && tag != 0) {
-            if (zeroPrefix) warningHandler("Tag with zero prefix at offset: $offset, raw: '${prettyString(offset)}'")
+            if (zeroPrefix) warningHandler(tag, "Tag with zero prefix at offset: $offset, raw: '${prettyString(offset)}'")
             tag
         } else {
             break
@@ -110,7 +110,7 @@ inline fun ByteBuf.forEachField(
     delimiter: Byte,
     charset: Charset,
     isDirty: Boolean,
-    warningHandler: (String) -> Unit,
+    warningHandler: (tag: Int, warning: String) -> Unit,
     action: (tag: Int, value: String) -> Boolean,
 ) {
     while (isReadable) {
@@ -126,7 +126,7 @@ inline fun ByteBuf.readField(
     delimiter: Byte,
     charset: Charset,
     isDirty: Boolean,
-    warningHandler: (String) -> Unit,
+    warningHandler: (tag: Int, warning: String) -> Unit,
     message: (Int) -> String,
 ): String = readTag(warningHandler).let {
     check(it == tag) { message(it) }
@@ -145,4 +145,12 @@ fun ByteBuf.writeChecksum(delimiter: Byte) {
     while (isReadable) checksum += readByte()
     readerIndex(index)
     writeTag(10).printInt(checksum % 256, 3).writeByte(delimiter.toInt())
+}
+
+fun ByteBuf.getLastTagIndex(delimiter: Byte): Int {
+    var maxNotDelimiterIndex = writerIndex() - 1
+    if (getByte(maxNotDelimiterIndex) == delimiter) {
+        maxNotDelimiterIndex -= 1
+    }
+    return indexOf(maxNotDelimiterIndex, 0, delimiter) + 1
 }
