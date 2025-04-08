@@ -32,6 +32,7 @@ import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.ParsedMess
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.RawMessage
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
+import mu.KotlinLogging
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -277,7 +278,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         val index = buffer.readerIndex()
         try {
             buffer.readerIndex(endBodyLengthOffset + bodyLength)
-            val tag = buffer.readTag { handleError(isDirty, context, it) }
+            val tag = buffer.readTag { LOGGER.warn { "Last tag reading problem: $it" } }
             if (tag != TAG_CHECKSUM) {
                 handleError(
                     isDirty, context,
@@ -637,6 +638,8 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     ) : Field, FieldMap()
 
     companion object {
+        private val LOGGER = KotlinLogging.logger { }
+
         private const val HEADER = "header"
         private const val TRAILER = "trailer"
         private val FIELDS_NOT_IN_BODY = setOf(HEADER, TRAILER)

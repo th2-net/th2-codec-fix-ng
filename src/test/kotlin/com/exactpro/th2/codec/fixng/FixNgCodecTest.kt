@@ -309,7 +309,6 @@ class FixNgCodecTest {
                 expectedErrors = listOf(
                     "Tag with zero prefix at offset: 0, raw: '08=FIXT.1....'",
                     "Tag with zero prefix at offset: 12, raw: '...09=302${delimiter}035...'",
-                    "Tag with zero prefix at offset: 321, raw: '...010=100${delimiter}'",
                     "Tag with zero prefix at offset: 19, raw: '...035=8${delimiter}49=S...'",
                     "Tag with zero prefix at offset: 47, raw: '...034=10947${delimiter}...'",
                     "Tag with zero prefix at offset: 98, raw: '...011=zSuNbr...'",
@@ -319,9 +318,8 @@ class FixNgCodecTest {
                     "Tag with zero prefix at offset: 229, raw: '...0447=P${delimiter}452...'",
                     "Tag with zero prefix at offset: 321, raw: '...010=100${delimiter}'",
                     "Tag with zero prefix at offset: 321, raw: '...010=100${delimiter}'",
-                    "Tag with zero prefix at offset: 321, raw: '...010=100${delimiter}'",
+                    "Tag with zero prefix at offset: 321, raw: '...010=100${delimiter}'", // FIXME: exclude the duplicate warning for 10 tag
                     // Warning for CheckSum field happens several times because it is read several times:
-                    // * at the body length check
                     // * at the end of body decoding
                     // * at the trailer decoding
                     // * at the checksum validation

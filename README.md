@@ -49,10 +49,10 @@ Component benchmark results available [here](docs/benchmarks/jmh-benchmark.md).
 
 ### 0.1.4
 
-* Fixes: 
-  * codec checks:
-    * that tag value may not contain leading zeros.
-    * BodyLength field.
++ Fixes: 
+  + codec checks:
+    + that tag value may not contain leading zeros.
+    + BodyLength field.
     * CheckSum filed.
 
 ### 0.1.3
