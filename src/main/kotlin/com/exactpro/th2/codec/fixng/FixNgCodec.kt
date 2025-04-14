@@ -1,5 +1,5 @@
 /*
- * Copyright 2023-2024 Exactpro (Exactpro Systems Limited)
+ * Copyright 2023-2025 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -128,16 +128,19 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             val isDirty = isDirtyMode || (message.metadata[ENCODE_MODE_PROPERTY_NAME] == DIRTY_ENCODE_MODE)
             val buffer = message.body
 
-            val beginString = buffer.readField(TAG_BEGIN_STRING, decodeDelimiter, charset, isDirty) {
-                "Message starts with $it tag instead of BeginString ($TAG_BEGIN_STRING)"
-            }
-            val bodyLengthString = buffer.readField(TAG_BODY_LENGTH, decodeDelimiter, charset, isDirty) {
-                "BeginString ($TAG_BEGIN_STRING) is followed by $it tag instead of BodyLength ($TAG_BODY_LENGTH)"
-            }
+            val beginString = buffer.readField(
+                TAG_BEGIN_STRING, decodeDelimiter, charset, isDirty,
+                { handleError(isDirty, context, it) },
+            ) { "Message starts with $it tag instead of BeginString ($TAG_BEGIN_STRING)" }
+            val bodyLengthString = buffer.readField(
+                TAG_BODY_LENGTH, decodeDelimiter, charset, isDirty,
+                { handleError(isDirty, context, it) },
+            ) { "BeginString ($TAG_BEGIN_STRING) is followed by $it tag instead of BodyLength ($TAG_BODY_LENGTH)" }
             val bodyLength = bodyLengthString.toIntOrNull() ?: handleError(isDirty, context, "Wrong number value in integer field 'BodyLength'. Value: $bodyLengthString.", bodyLengthString)
-            val msgType = buffer.readField(TAG_MSG_TYPE, decodeDelimiter, charset, isDirty) {
-                "BodyLength ($TAG_BODY_LENGTH) is followed by $it tag instead of MsgType ($TAG_MSG_TYPE)"
-            }
+            val msgType = buffer.readField(
+                TAG_MSG_TYPE, decodeDelimiter, charset, isDirty,
+                { handleError(isDirty, context, it) }
+            ) { "BodyLength ($TAG_BODY_LENGTH) is followed by $it tag instead of MsgType ($TAG_MSG_TYPE)" }
             val messageDef = messagesByTypeForDecode[msgType] ?: error("Unknown message type: $msgType")
 
             val header = headerDef.decode(buffer, messageDef, isDirty, fieldsDecode, context)
@@ -146,7 +149,13 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
             if (buffer.isReadable) {
                 // this should never happen in dirty mode
-                val errorMessage = if (isDirty) "Field was not processed in dirty mode. Tag: ${buffer.readTag()}" else "Tag appears out of order: ${buffer.readTag()}"
+                val errorMessage = if (isDirty) {
+                    "Field was not processed in dirty mode. Tag: ${
+                        buffer.readTag { handleError(isDirty, context,it)}
+                    }"
+                } else {
+                    "Tag appears out of order: ${buffer.readTag { handleError(isDirty, context, it) }}"
+                }
                 error(errorMessage)
             }
 
@@ -217,13 +226,16 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         targetMap[name] = decodedValue
     }
 
-    private val preparedHeaderTags = arrayOf(8 /* BeginString */, 9 /* BodyLength */, 35 /* MsgType */)
+    private val preparedHeaderTags = arrayOf(TAG_BEGIN_STRING, TAG_BODY_LENGTH, TAG_MSG_TYPE)
 
     private fun Message.decode(source: ByteBuf, bodyDef: Message, isDirty: Boolean, dictionaryFields: Map<Int, Field>, context: IReportingContext): MutableMap<String, Any> = mutableMapOf<String, Any>().also { map ->
         val tagsSet: MutableSet<Int> = hashSetOf(*preparedHeaderTags)
         val usedComponents = mutableSetOf<String>()
 
-        source.forEachField(decodeDelimiter, charset, isDirty) { tag, value ->
+        source.forEachField(
+            decodeDelimiter, charset, isDirty,
+            { handleError(isDirty, context, it) }
+        ) { tag, value ->
             val field = get(tag) ?: if (isDirty) {
                 when (this) {
                     headerDef -> bodyDef[tag] ?: trailerDef[tag]
@@ -322,12 +334,19 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         var map: MutableMap<String, Any>? = null
         val tags: MutableSet<Int> = hashSetOf()
 
-        source.forEachField(decodeDelimiter, charset, isDirty) { tag, value ->
+        source.forEachField(
+            decodeDelimiter, charset, isDirty,
+            { handleError(isDirty, context, it) }
+        ) { tag, value ->
             val field = get(tag) ?: return@forEachField false
 
             val group = if (tag == delimiter || tags.contains(tag) || map == null) {
                 if (tag != delimiter) {
-                    handleError(isDirty, context, "Field ${field.name} ($tag) appears before delimiter ($delimiter)")
+                    handleError(
+                        isDirty,
+                        context,
+                        "Field ${field.name} ($tag) appears before delimiter ($delimiter)"
+                    )
                 }
 
                 tags.clear()
@@ -538,7 +557,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             .toFormatter()
 
         private val javaTypeToClass = EnumMap<JavaType, Class<*>>(JavaType::class.java).apply {
-            for (type in JavaType.values()) {
+            for (type in JavaType.entries) {
                 put(type, Class.forName(type.value()))
             }
             withDefault { error("Unsupported java type: $it") }
