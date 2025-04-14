@@ -224,7 +224,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 )
                 return
             }
-            if (checksum < 0 || 255 < checksum) {
+            if (checksum !in 0..255) {
                 handleError(
                     isDirty, context,
                     "CheckSum ($TAG_CHECKSUM) field must have value from 0 to 255 included both limits instead of '$checksum' value"
