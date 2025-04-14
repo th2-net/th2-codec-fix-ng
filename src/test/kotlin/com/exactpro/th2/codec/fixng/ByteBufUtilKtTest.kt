@@ -36,7 +36,5 @@ class ByteBufUtilKtTest {
 
     companion object {
         private const val MSG_CORRECT = "8=FIXT.1.19=29535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
-
-        fun String.replaceSoh(value: Char) = if (value == '') this else replace('', value)
     }
 }

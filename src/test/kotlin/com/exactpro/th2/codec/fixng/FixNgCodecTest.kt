@@ -19,7 +19,6 @@ package com.exactpro.th2.codec.fixng
 import com.exactpro.sf.common.messages.structures.IDictionaryStructure
 import com.exactpro.sf.common.messages.structures.loaders.XmlDictionaryStructureLoader
 import com.exactpro.th2.codec.api.IReportingContext
-import com.exactpro.th2.codec.fixng.ByteBufUtilKtTest.Companion.replaceSoh
 import com.exactpro.th2.codec.fixng.FixNgCodecFactory.Companion.PROTOCOL
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.Direction
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.EventId
