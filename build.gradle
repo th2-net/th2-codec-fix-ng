@@ -25,27 +25,9 @@ repositories {
         }
     }
 
-    maven { // FIXME: remove before merge into master
-        name 'Sonatype_snapshot'
-        url 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
-        content {
-            excludeSailfish(it)
-        }
-    }
-
     maven {
         name 'Sonatype_releases'
         url 'https://s01.oss.sonatype.org/content/repositories/releases/'
-        metadataSources {
-            mavenPom()
-            artifact()
-            ignoreGradleMetadataRedirection()
-        }
-    }
-
-    maven { // FIXME: remove before merge into master
-        name 'Sonatype_releases'
-        url 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
         metadataSources {
             mavenPom()
             artifact()
