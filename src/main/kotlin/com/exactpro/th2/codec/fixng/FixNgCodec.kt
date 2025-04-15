@@ -162,6 +162,8 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 error(errorMessage)
             }
 
+            validateCheckSum(isDirty, context, buffer)
+
             header["BeginString"] = beginString
             header["BodyLength"] = if (isDecodeToStrings) bodyLengthString else bodyLength
             header["MsgType"] = msgType
@@ -180,6 +182,66 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         }
 
         return MessageGroup(messages)
+    }
+
+    /**
+     * Information about 'CheckSum' field from FIX specification:
+     * Three byte, simple checksum (see Volume 2: "Checksum Calculation" for description).
+     * ALWAYS LAST FIELD IN MESSAGE; i.e. serves, with the trailing <SOH>, as the end-of-message delimiter.
+     * Always defined as three characters. (Always unencrypted)
+     */
+    private fun validateCheckSum(
+        isDirty: Boolean,
+        context: IReportingContext,
+        buffer: ByteBuf,
+    ) {
+        val index = buffer.readerIndex()
+        try {
+            val lastTagIndex = buffer.indexOf(buffer.writerIndex() - 1, 0, decodeDelimiter) + 1
+            buffer.readerIndex(lastTagIndex)
+            val lastTag = buffer.readTag { tag, warn -> { LOGGER.warn { "Tag ($tag) reading problem: $warn" } } }
+            if (lastTag != TAG_CHECKSUM) {
+                handleError(
+                    isDirty, context,
+                    "Message ends with $lastTag tag instead of CheckSum ($TAG_CHECKSUM)",
+                )
+                return
+            }
+            val value = buffer.readValue(decodeDelimiter, charset, isDirty)
+            val valueSize = value.toByteArray(charset).size
+            if (valueSize != 3) {
+                handleError(
+                    isDirty, context,
+                    "CheckSum ($TAG_CHECKSUM) field must have 3 bytes length, instead of size: $valueSize, value: '$value'",
+                )
+                return
+            }
+            val checksum = value.toIntOrNull()
+            if (checksum == null) {
+                handleError(
+                    isDirty, context,
+                    "CheckSum ($TAG_CHECKSUM) field value must consist of digits only instead of '$value'",
+                )
+                return
+            }
+            if (checksum !in 0..255) {
+                handleError(
+                    isDirty, context,
+                    "CheckSum ($TAG_CHECKSUM) field must have value from 0 to 255 included both limits instead of '$checksum' value"
+                )
+                return
+            }
+            val calculatedChecksum = buffer.slice(0, lastTagIndex)
+                .calculateChecksum(decodeDelimiter)
+            if (checksum != calculatedChecksum) {
+                handleError(
+                    isDirty, context,
+                    "CheckSum ($TAG_CHECKSUM) field has $checksum value which isn't matched to calculated value $calculatedChecksum"
+                )
+            }
+        } finally {
+            buffer.readerIndex(index)
+        }
     }
 
     /**
@@ -603,8 +665,6 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
     companion object {
         private val LOGGER = KotlinLogging.logger { }
-        const val SOH_CHAR = ''
-        private const val SOH_BYTE = SOH_CHAR.code.toByte()
 
         private const val HEADER = "header"
         private const val TRAILER = "trailer"

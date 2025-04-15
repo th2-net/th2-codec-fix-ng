@@ -83,6 +83,7 @@ class FixNgCodecTest {
     fun `body length is not int decode (dirty)`(delimiter: Char) {
         with(parsedMessage) {
             (body map "header").set("BodyLength", VALUE_NOT_INT_BODY_LENGTH)
+            (body map "trailer").set("CheckSum", "069")
             decodeTest(
                 MSG_WITH_NOT_INT_BODY_LENGTH,
                 dirtyMode = true,
@@ -113,6 +114,7 @@ class FixNgCodecTest {
     fun `body length less zero decode (dirty)`(delimiter: Char) {
         with(parsedMessage) {
             (body map "header").set("BodyLength", VALUE_BODY_LENGTH_LESS_ZERO)
+            (body map "trailer").set("CheckSum", "173")
             decodeTest(
                 MSG_WITH_BODY_LENGTH_LESS_ZERO,
                 dirtyMode = true,
@@ -143,6 +145,7 @@ class FixNgCodecTest {
     fun `body length greater real body decode (dirty)`(delimiter: Char) {
         with(parsedMessage) {
             (body map "header").set("BodyLength", VALUE_BODY_LENGTH_GREATER_REAL_BODY)
+            (body map "trailer").set("CheckSum", "202")
             decodeTest(
                 MSG_WITH_BODY_LENGTH_GREATER_REAL_BODY,
                 dirtyMode = true,
@@ -173,6 +176,7 @@ class FixNgCodecTest {
     fun `no checksum after body decode (dirty)`(delimiter: Char) {
         with(parsedMessage) {
             (body map "header").set("BodyLength", VALUE_NO_CHECKSUM_AFTER_BODY)
+            (body map "trailer").set("CheckSum", "190")
             decodeTest(
                 MSG_WITH_NO_CHECKSUM_AFTER_BODY,
                 dirtyMode = true,
@@ -200,9 +204,102 @@ class FixNgCodecTest {
 
     @ParameterizedTest
     @ValueSource(chars = ['', '|'])
+    fun `short check sum value decode (dirty)`(delimiter: Char) {
+        with(parsedMessage) {
+            (body map "header").set("BodyLength", 296)
+            body.set("ExecID", "4955046999")
+            (body map "trailer").set("CheckSum", VALUE_SHORT_CHECK_SUM)
+            decodeTest(
+                MSG_WITH_SHORT_CHECK_SUM,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf(
+                    "CheckSum (10) field must have 3 bytes length, instead of size: 1, value: '$VALUE_SHORT_CHECK_SUM'",
+                )
+            )
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `short check sum value decode (not dirty)`(delimiter: Char) {
+        decodeTest(
+            MSG_WITH_SHORT_CHECK_SUM,
+            dirtyMode = false,
+            delimiter = delimiter,
+            expectedErrors = listOf(
+                "CheckSum (10) field must have 3 bytes length, instead of size: 1, value: '3'",
+            )
+        )
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `too big check sum value decode (dirty)`(delimiter: Char) {
+        with(parsedMessage) {
+            (body map "trailer").set("CheckSum", VALUE_TOO_BIG_CHECK_SUM)
+            decodeTest(
+                MSG_WITH_TOO_BIG_CHECK_SUM,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf(
+                    "CheckSum (10) field must have value from 0 to 255 included both limits instead of '$VALUE_TOO_BIG_CHECK_SUM' value",
+                )
+            )
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `too big check sum value decode (not dirty)`(delimiter: Char) {
+        decodeTest(
+            MSG_WITH_TOO_BIG_CHECK_SUM,
+            dirtyMode = false,
+            delimiter = delimiter,
+            expectedErrors = listOf(
+                "CheckSum (10) field must have value from 0 to 255 included both limits instead of '$VALUE_TOO_BIG_CHECK_SUM' value",
+            )
+        )
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `incorrect check sum value decode (dirty)`(delimiter: Char) {
+        with(parsedMessage) {
+            (body map "trailer").set("CheckSum", VALUE_INCORRECT_CHECK_SUM)
+            decodeTest(
+                MSG_WITH_INCORRECT_CHECK_SUM,
+                dirtyMode = true,
+                delimiter = delimiter,
+                expectedMessage = this,
+                expectedErrors = listOf(
+                    "CheckSum (10) field has $VALUE_INCORRECT_CHECK_SUM value which isn't matched to calculated value 191",
+                )
+            )
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
+    fun `incorrect check sum value decode (not dirty)`(delimiter: Char) {
+        decodeTest(
+            MSG_WITH_INCORRECT_CHECK_SUM,
+            dirtyMode = false,
+            delimiter = delimiter,
+            expectedErrors = listOf(
+                "CheckSum (10) field has $VALUE_INCORRECT_CHECK_SUM value which isn't matched to calculated value 191",
+            )
+        )
+    }
+
+    @ParameterizedTest
+    @ValueSource(chars = ['', '|'])
     fun `tags with 0 prefix decode (dirty)`(delimiter: Char) {
         with(parsedMessage) {
             (body map "header").set("BodyLength", 302)
+            (body map "trailer").set("CheckSum", "100")
             decodeTest(
                 MSG_WITH_0_PREFIX,
                 dirtyMode = true,
@@ -218,7 +315,7 @@ class FixNgCodecTest {
                     "Tag with zero prefix at offset: 193, raw: '...0448=NGALL...'",
                     "Tag with zero prefix at offset: 215, raw: '...0452=76${delimiter}44...'",
                     "Tag with zero prefix at offset: 229, raw: '...0447=P${delimiter}452...'",
-                    "Tag with zero prefix at offset: 321, raw: '...010=191${delimiter}'",
+                    "Tag with zero prefix at offset: 321, raw: '...010=100${delimiter}'",
                 ),
             )
         }
@@ -308,7 +405,7 @@ class FixNgCodecTest {
         with(parsedMessage) {
             body.set("9999", "54321")
             (body map "header").set("BodyLength", 306)
-            (body map "trailer").set("CheckSum", "097")
+            (body map "trailer").set("CheckSum", "217")
             decodeTest(
                 MSG_ADDITIONAL_FIELD_NO_DICT,
                 dirtyMode = true,
@@ -610,7 +707,10 @@ class FixNgCodecTest {
                 dirtyMode = true,
                 delimiter = delimiter,
                 expectedMessage = this,
-                expectedErrors = listOf("Unexpected field in message. Field name: LegUnitOfMeasure. Field value: 500"),
+                expectedErrors = listOf(
+                    "Unexpected field in message. Field name: LegUnitOfMeasure. Field value: 500",
+                    "Message ends with 999 tag instead of CheckSum (10)",
+                ),
             )
         }
     }
@@ -642,7 +742,7 @@ class FixNgCodecTest {
         with(parsedMessageWithNestedComponents) {
             body map "OuterComponent" map "InnerComponent" remove "OrdType"
             (body map "header").set("BodyLength", 54)
-            (body map "trailer").set("CheckSum", "191")
+            (body map "trailer").set("CheckSum", "231")
             decodeTest(
                 MSG_NESTED_REQ_COMPONENTS_MISSED_REQ,
                 dirtyMode = isDirty,
@@ -659,7 +759,7 @@ class FixNgCodecTest {
         with(parsedMessageWithNestedComponents) {
             body map "OuterComponent" map "InnerComponent" remove "Text"
             (body map "header").set("BodyLength", 49)
-            (body map "trailer").set("CheckSum", "191")
+            (body map "trailer").set("CheckSum", "190")
             decodeTest(
                 MSG_NESTED_REQ_COMPONENTS_MISSED_OPTIONAL,
                 dirtyMode = isDirty,
@@ -680,8 +780,10 @@ class FixNgCodecTest {
     @ParameterizedTest
     @MethodSource("configs")
     fun `decode nested optional components`(isDirty: Boolean, delimiter: Char) {
-        val message = convertToOptionalComponent()
-        decodeTest(MSG_NESTED_OPT_COMPONENTS, dirtyMode = isDirty, delimiter = delimiter, expectedMessage = message)
+        with(convertToOptionalComponent()) {
+            (body map "trailer").set("CheckSum", "192")
+            decodeTest(MSG_NESTED_OPT_COMPONENTS, dirtyMode = isDirty, delimiter = delimiter, expectedMessage = this)
+        }
     }
 
     @ParameterizedTest
@@ -690,7 +792,7 @@ class FixNgCodecTest {
         with(convertToOptionalComponent()) {
             body map "OuterComponent" map "InnerComponent" remove "OrdType"
             (body map "header").set("BodyLength", 54)
-            (body map "trailer").set("CheckSum", "191")
+            (body map "trailer").set("CheckSum", "232")
             decodeTest(
                 MSG_NESTED_OPT_COMPONENTS_MISSED_REQ,
                 dirtyMode = isDirty,
@@ -707,7 +809,7 @@ class FixNgCodecTest {
         with(convertToOptionalComponent()) {
             body map "OuterComponent" remove "InnerComponent"
             (body map "header").set("BodyLength", 44)
-            (body map "trailer").set("CheckSum", "191")
+            (body map "trailer").set("CheckSum", "231")
             decodeTest(
                 MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS,
                 dirtyMode = isDirty,
@@ -724,7 +826,7 @@ class FixNgCodecTest {
         with(convertToOptionalComponent()) {
             body remove "OuterComponent"
             (body map "header").set("BodyLength", 35)
-            (body map "trailer").set("CheckSum", "191")
+            (body map "trailer").set("CheckSum", "072")
             decodeTest(
                 MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS_INNER_AND_OUTER,
                 dirtyMode = isDirty,
@@ -741,7 +843,7 @@ class FixNgCodecTest {
             body map "OuterComponent" remove "LeavesQty"
             body map "OuterComponent" map "InnerComponent" remove "OrdType"
             (body map "header").set("BodyLength", 45)
-            (body map "trailer").set("CheckSum", "191")
+            (body map "trailer").set("CheckSum", "073")
             decodeTest(
                 MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_OUTER_FIELDS_AND_REQ_INNER_FIELD,
                 dirtyMode = isDirty,
@@ -1162,16 +1264,22 @@ class FixNgCodecTest {
         private const val VALUE_BODY_LENGTH_LESS_ZERO = -10
         private const val VALUE_BODY_LENGTH_GREATER_REAL_BODY = 999
         private const val VALUE_NO_CHECKSUM_AFTER_BODY = 267
+        private const val VALUE_SHORT_CHECK_SUM = "3"
+        private const val VALUE_TOO_BIG_CHECK_SUM = "999"
+        private const val VALUE_INCORRECT_CHECK_SUM = "255"
 
         private const val MSG_CORRECT = "8=FIXT.1.19=29535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
-        private const val MSG_WITH_NOT_INT_BODY_LENGTH = "8=FIXT.1.19=$VALUE_NOT_INT_BODY_LENGTH35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
-        private const val MSG_WITH_BODY_LENGTH_LESS_ZERO = "8=FIXT.1.19=$VALUE_BODY_LENGTH_LESS_ZERO35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
-        private const val MSG_WITH_BODY_LENGTH_GREATER_REAL_BODY = "8=FIXT.1.19=$VALUE_BODY_LENGTH_GREATER_REAL_BODY35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
-        private const val MSG_WITH_NO_CHECKSUM_AFTER_BODY = "8=FIXT.1.19=$VALUE_NO_CHECKSUM_AFTER_BODY35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
-        private const val MSG_WITH_0_PREFIX = "08=FIXT.1.109=302035=849=SENDER56=RECEIVER034=1094752=20230419-10:36:07.41508817=495504662011=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=80453=20448=NGALL1FX01447=D0452=76448=00447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.000008010=191"
+        private const val MSG_WITH_SHORT_CHECK_SUM = "8=FIXT.1.19=29635=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=495504699911=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=$VALUE_SHORT_CHECK_SUM"
+        private const val MSG_WITH_TOO_BIG_CHECK_SUM = "8=FIXT.1.19=29535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=$VALUE_TOO_BIG_CHECK_SUM"
+        private const val MSG_WITH_INCORRECT_CHECK_SUM = "8=FIXT.1.19=29535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=$VALUE_INCORRECT_CHECK_SUM"
+        private const val MSG_WITH_NOT_INT_BODY_LENGTH = "8=FIXT.1.19=$VALUE_NOT_INT_BODY_LENGTH35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=069"
+        private const val MSG_WITH_BODY_LENGTH_LESS_ZERO = "8=FIXT.1.19=$VALUE_BODY_LENGTH_LESS_ZERO35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=173"
+        private const val MSG_WITH_BODY_LENGTH_GREATER_REAL_BODY = "8=FIXT.1.19=$VALUE_BODY_LENGTH_GREATER_REAL_BODY35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=202"
+        private const val MSG_WITH_NO_CHECKSUM_AFTER_BODY = "8=FIXT.1.19=$VALUE_NO_CHECKSUM_AFTER_BODY35=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=190"
+        private const val MSG_WITH_0_PREFIX = "08=FIXT.1.109=302035=849=SENDER56=RECEIVER034=1094752=20230419-10:36:07.41508817=495504662011=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=80453=20448=NGALL1FX01447=D0452=76448=00447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.000008010=100"
         private const val MSG_CORRECT_WITHOUT_BODY = "8=FIX.4.29=5535=034=12549=MZHOT052=20240801-08:03:01.22956=INET10=039"
         private const val MSG_ADDITIONAL_FIELD_DICT = "8=FIXT.1.19=30535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.000008461=1234510=143"
-        private const val MSG_ADDITIONAL_FIELD_NO_DICT = "8=FIXT.1.19=30635=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.0000089999=5432110=097"
+        private const val MSG_ADDITIONAL_FIELD_NO_DICT = "8=FIXT.1.19=30635=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.0000089999=5432110=217"
         private const val MSG_ADDITIONAL_FIELD_TAG = "8=FIXT.1.19=30635=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.0000089999=1234510=217"
         private const val MSG_REQUIRED_FIELD_REMOVED = "8=FIXT.1.19=28235=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508811=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=060"
         private const val MSG_DELIMITER_FIELD_IN_GROUP_REMOVED_IN_FIRST_ENTRY = "8=FIXT.1.19=28035=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=061"
@@ -1184,14 +1292,14 @@ class FixNgCodecTest {
         private const val MSG_TAG_OUT_OF_ORDER = "8=FIXT.1.19=29535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=000999=500"
 
         private const val MSG_NESTED_REQ_COMPONENTS = "8=FIXT.1.19=5935=TEST_149=MZHOT056=INET34=12558=text_140=1151=123410=191"
-        private const val MSG_NESTED_REQ_COMPONENTS_MISSED_REQ = "8=FIXT.1.19=5435=TEST_149=MZHOT056=INET34=12558=text_1151=123410=191"
-        private const val MSG_NESTED_REQ_COMPONENTS_MISSED_OPTIONAL = "8=FIXT.1.19=4935=TEST_149=MZHOT056=INET34=12540=1151=123410=191"
+        private const val MSG_NESTED_REQ_COMPONENTS_MISSED_REQ = "8=FIXT.1.19=5435=TEST_149=MZHOT056=INET34=12558=text_1151=123410=231"
+        private const val MSG_NESTED_REQ_COMPONENTS_MISSED_OPTIONAL = "8=FIXT.1.19=4935=TEST_149=MZHOT056=INET34=12540=1151=123410=190"
 
-        private const val MSG_NESTED_OPT_COMPONENTS = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=12558=text_140=1151=123410=191"
-        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_REQ = "8=FIXT.1.19=5435=TEST_249=MZHOT056=INET34=12558=text_1151=123410=191"
-        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS = "8=FIXT.1.19=4435=TEST_249=MZHOT056=INET34=125151=123410=191"
-        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS_INNER_AND_OUTER = "8=FIXT.1.19=3535=TEST_249=MZHOT056=INET34=12510=191"
-        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_OUTER_FIELDS_AND_REQ_INNER_FIELD = "8=FIXT.1.19=4535=TEST_249=MZHOT056=INET34=12558=text_110=191"
+        private const val MSG_NESTED_OPT_COMPONENTS = "8=FIXT.1.19=5935=TEST_249=MZHOT056=INET34=12558=text_140=1151=123410=192"
+        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_REQ = "8=FIXT.1.19=5435=TEST_249=MZHOT056=INET34=12558=text_1151=123410=232"
+        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS = "8=FIXT.1.19=4435=TEST_249=MZHOT056=INET34=125151=123410=231"
+        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_FIELDS_INNER_AND_OUTER = "8=FIXT.1.19=3535=TEST_249=MZHOT056=INET34=12510=072"
+        private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_OUTER_FIELDS_AND_REQ_INNER_FIELD = "8=FIXT.1.19=4535=TEST_249=MZHOT056=INET34=12558=text_110=073"
 
         private const val MSG_NESTED_GROUPS = "8=FIXT.1.19=8835=TEST_349=MZHOT056=INET34=12573=2398=3399=1399=2399=3398=3399=3399=2399=110=211"
         private const val MSG_TIME_ZONE = "8=FIXT.1.19=12335=TEST_449=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508860=20180205-10:38:08.000008449=20180205450=10:38:0810=206"
@@ -1203,7 +1311,5 @@ class FixNgCodecTest {
             Arguments.of(false, ''),
             Arguments.of(false, '|'),
         )
-
-        private fun String.replaceSoh(value: Char) = if (value == '') this else replace('', value)
     }
 }
