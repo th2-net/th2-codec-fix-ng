@@ -54,6 +54,10 @@ dependencies {
         exclude group: "com.exactpro.mina", module: "apache-mina-core" // because of the vulnerability
         exclude group: "javax.activation", module: "javax.activation-api" // because of the license
     }
+    implementation(libs.commons.beanutils) {
+        because("CVE-2025-48734 vulnerability in 1.9.4 version." +
+                "FIXME: look at this dependency after update sailfish-common")
+    }
 
     implementation "io.netty:netty-buffer"
     implementation "org.jetbrains.kotlin:kotlin-reflect"
