@@ -10,7 +10,7 @@ Configuration example.
 beginString: FIXT.1.1
 dictionary: "${dictionary_link:fix50-generic}"
 charset: US-ASCII
-decodeDelimiter: \u0001
+decodeDelimiter: "\u0001"
 dirtyMode: false
 decodeValuesToStrings: true
 decodeComponentsToNestedMaps: true
@@ -26,7 +26,7 @@ required value. XML file containing the FIX dictionary.
 default value: `US-ASCII`. Charset for reading and writing FIX fields.
 
 #### decodeDelimiter
-default value: `\u0001`. Delimiter character from `US-ASCII` charset.
+default value: `"\u0001"`. Delimiter character from `US-ASCII` charset.
 
 #### dirtyMode
 default value: `false`. If `true`, processes all messages in dirty mode (generates warnings on invalid messages and continues processing). If `false`, only messages that contain the `encode-mode: dirty` property will be processed in dirty mode.
@@ -64,7 +64,7 @@ spec:
       beginString: FIXT.1.1 # Optional: default "FIXT.1.1"
       dictionary: "${dictionary_link:fix50-generic}" # Required
       charset: US-ASCII # Optional: default "US-ASCII" 
-      decodeDelimiter: \u0001 # Optional: default "\u0001"
+      decodeDelimiter: "\u0001" # Optional: default "\u0001"
       dirtyMode: false # Optional: default false
       decodeValuesToStrings: true # Optional: default true
       decodeComponentsToNestedMaps: true # Optional: default true
