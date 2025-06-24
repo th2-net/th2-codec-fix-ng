@@ -4,16 +4,11 @@ This codec can be used in dirty mode for decoding and encoding messages via the 
 
 ## Configuration
 
-### Codec factory
-
-To use the FIX codec you will need to specify the following codec factory:
-**com.exactpro.th2.codec.fixng.FixNgCodecFactory**
-
 ### Configuration parameters
 Configuration example.
 ```yaml
 beginString: FIXT.1.1
-dictionary: fix_dictionary.xml
+dictionary: "${dictionary_link:fix50-generic}"
 charset: US-ASCII
 decodeDelimiter: \u0001
 dirtyMode: false
@@ -41,6 +36,94 @@ default value: `true`. If `true`, decodes all values to strings instead of typed
 
 #### decodeComponentsToNestedMaps
 default value: `true`. If `true`, decodes `components` to nested maps instead of unwrap component's map to message's main map.
+
+### th2 schema example
+
+```yaml
+apiVersion: th2.exactpro.com/v2
+kind: Th2Box
+metadata:
+  name: codec-fix-ng
+spec:
+  disabled: false
+  imageName: ghcr.io/th2-net/th2-codec-fix-ng
+  imageVersion: 0.1.4-dev
+  type: th2-codec
+  customConfig:
+    transportLines:
+      default:
+        type: TH2_TRANSPORT
+        useParentEventId: true
+      rpt:
+        type: TH2_TRANSPORT
+        useParentEventId: true
+      lw:
+        type: TH2_TRANSPORT
+        useParentEventId: true
+    codecSettings:
+      beginString: FIXT.1.1 # Optional: default "FIXT.1.1"
+      dictionary: "${dictionary_link:fix50-generic}" # Required
+      charset: US-ASCII # Optional: default "US-ASCII" 
+      decodeDelimiter: \u0001 # Optional: default "\u0001"
+      dirtyMode: false # Optional: default false
+      decodeValuesToStrings: true # Optional: default true
+      decodeComponentsToNestedMaps: true # Optional: default true
+  extendedSettings:
+    envVariables:
+      JAVA_TOOL_OPTIONS: >
+        -XX:+ExitOnOutOfMemoryError
+        -XX:+UseContainerSupport
+        -Dlog4j2.shutdownHookEnabled=false
+        -Xlog:gc,gc+heap*,gc+start,gc+metaspace::utc,level,tags
+        -XX:MaxRAMPercentage=45.4
+        -XX:MaxMetaspaceSize=81M
+        -XX:CompressedClassSpaceSize=12M
+        -XX:ReservedCodeCacheSize=30M
+        -XX:MaxDirectMemorySize=50M
+    resources:
+      limits:
+        memory: 350Mi
+        cpu: 300m
+      requests:
+        memory: 250Mi
+        cpu: 200m
+    service:
+      enabled: false
+  pins:
+    mq:
+      subscribers:
+        # default:
+        - name: in_codec_encode
+          attributes: [subscribe, transport-group, default_encoder_in]
+        - name: in_codec_decode
+          attributes: [subscribe, transport-group, default_decoder_in]
+        # rpt:
+        - name: in_codec_rpt_decode
+          attributes: [subscribe, transport-group, rpt_decoder_in]
+        - name: in_codec_rpt_encode
+          attributes: [subscribe, transport-group, rpt_encoder_in]
+        # lw:
+        - name: in_codec_lw_decode
+          attributes: [subscribe, transport-group, lw_decoder_in]
+        - name: in_codec_lw_encode
+          attributes: [subscribe, transport-group, lw_encoder_in]
+      publishers:
+        # default:
+        - name: out_codec_encode
+          attributes: [publish, transport-group, default_encoder_out]
+        - name: out_codec_decode
+          attributes: [publish, transport-group, default_decoder_out]
+        # rpt:
+        - name: out_codec_rpt_decode
+          attributes: [publish, transport-group, rpt_decoder_out]
+        - name: out_codec_rpt_encode
+          attributes: [publish, transport-group, rpt_encoder_out]
+        # lw:
+        - name: out_codec_lw_decode
+          attributes: [publish, transport-group, lw_decoder_out]
+        - name: out_codec_lw_encode
+          attributes: [publish, transport-group, lw_encoder_out]
+```
 
 ## Performance
 Component benchmark results available [here](docs/benchmarks/jmh-benchmark.md).
