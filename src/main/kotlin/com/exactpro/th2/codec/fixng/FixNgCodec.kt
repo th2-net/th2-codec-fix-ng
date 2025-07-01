@@ -518,7 +518,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                                 LocalTime::class.java -> MultiConverter.convert<LocalTime>(value, LocalTime::class.java)
                                 java.lang.Boolean::class.java -> when {
                                     value.equals("true", true) -> true
+                                    value.equals("Y", true) -> true // https://github.com/th2-net/th2-codec-fix-ng/issues/43
                                     value.equals("false", true) -> false
+                                    value.equals("N", true) -> false // https://github.com/th2-net/th2-codec-fix-ng/issues/43
                                     else -> handleError(isDirty, context, "Wrong boolean value in ${field.primitiveType.name} field '$field.name'. Value: $value.", value)
                                 }
                                 else -> {
