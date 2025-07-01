@@ -35,6 +35,7 @@ import org.junit.jupiter.api.assertNotNull
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
 import java.math.BigDecimal
@@ -881,6 +882,127 @@ class FixNgCodecTest {
         parsedMessage = parsedMessageWithTimezone
     )
 
+    @ParameterizedTest
+    @MethodSource("configs")
+    // https://github.com/th2-net/th2-codec-fix-ng/issues/43
+    fun `encode true boolean`(isDirty: Boolean, delimiter: Char) =
+        encodeTest(MSG_LOGON, isDirty, delimiter, parsedMessage = parsedLogon)
+
+    @ParameterizedTest
+    @CsvSource(
+        ignoreLeadingAndTrailingWhitespace = false, value = [
+            "true,,true",
+            "true,,TrUe",
+            "true,|,true",
+            "true,|,TrUe",
+            "false,,true",
+            "false,,TrUe",
+            "false,|,true",
+            "false,|,TrUe",
+        ]
+    )
+    // https://github.com/th2-net/th2-codec-fix-ng/issues/43
+    fun `encode true string`(isDirty: Boolean, delimiter: Char, value: String) = with(parsedLogon) {
+        body.set("ResetSeqNumFlag", value)
+        encodeTest(
+            expectedRawMessage = MSG_LOGON,
+            dirtyMode = isDirty,
+            delimiter = delimiter,
+            parsedMessage = this
+        )
+    }
+
+    @ParameterizedTest
+    @MethodSource("configs")
+    // https://github.com/th2-net/th2-codec-fix-ng/issues/43
+    fun `encode false boolean`(isDirty: Boolean, delimiter: Char) = with(parsedLogon) {
+        body.set("ResetSeqNumFlag", false)
+        encodeTest(
+            expectedRawMessage = MSG_LOGON
+                .replace("141=Y", "141=N")
+                .replace("10=213", "10=202"),
+            dirtyMode = isDirty,
+            delimiter = delimiter,
+            parsedMessage = this
+        )
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        ignoreLeadingAndTrailingWhitespace = false, value = [
+            "true,,false",
+            "true,,FaLsE",
+            "true,|,false",
+            "true,|,FaLsE",
+            "false,,false",
+            "false,,FaLsE",
+            "false,|,false",
+            "false,|,FaLsE",
+        ]
+    )
+    // https://github.com/th2-net/th2-codec-fix-ng/issues/43
+    fun `encode false string`(isDirty: Boolean, delimiter: Char, value: String) = with(parsedLogon) {
+        body.set("ResetSeqNumFlag", value)
+        encodeTest(
+            expectedRawMessage = MSG_LOGON
+                .replace("141=Y", "141=N")
+                .replace("10=213", "10=202"),
+            dirtyMode = isDirty,
+            delimiter = delimiter,
+            parsedMessage = this
+        )
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        ignoreLeadingAndTrailingWhitespace = false, value = [
+            "true,,y",
+            "true,,Y",
+            "true,|,y",
+            "true,|,Y",
+            "false,,y",
+            "false,,Y",
+            "false,|,y",
+            "false,|,Y",
+        ]
+    )
+    // https://github.com/th2-net/th2-codec-fix-ng/issues/43
+    fun `encode Y string`(isDirty: Boolean, delimiter: Char, value: String) = with(parsedLogon) {
+        body.set("ResetSeqNumFlag", value)
+        encodeTest(
+            expectedRawMessage = MSG_LOGON,
+            dirtyMode = isDirty,
+            delimiter = delimiter,
+            parsedMessage = this
+        )
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        ignoreLeadingAndTrailingWhitespace = false, value = [
+            "true,,n",
+            "true,,N",
+            "true,|,n",
+            "true,|,N",
+            "false,,n",
+            "false,,N",
+            "false,|,n",
+            "false,|,N",
+        ]
+    )
+    // https://github.com/th2-net/th2-codec-fix-ng/issues/43
+    fun `encode N string`(isDirty: Boolean, delimiter: Char, value: String) = with(parsedLogon) {
+        body.set("ResetSeqNumFlag", value)
+        encodeTest(
+            expectedRawMessage = MSG_LOGON
+                .replace("141=Y", "141=N")
+                .replace("10=213", "10=202"),
+            dirtyMode = isDirty,
+            delimiter = delimiter,
+            parsedMessage = this
+        )
+    }
+
     private fun createCodec(delimiter: Char = '', decodeValuesToStrings: Boolean = false): FixNgCodec {
         return FixNgCodec(dictionary, FixNgCodecSettings(
             dictionary = "",
@@ -1029,7 +1151,7 @@ class FixNgCodecTest {
                                 "Expected text doesn't match to actual warning, index: $index"
                             }.startsWith(DIRTY_MODE_WARNING_PREFIX + expected)
                         }
-                    }.toList<Executable>()
+                    }.toList()
             )
         }
     }
@@ -1246,6 +1368,32 @@ class FixNgCodecTest {
         )
     )
 
+    private val parsedLogon = ParsedMessage(
+        MessageId("test_alias", Direction.OUTGOING, 0L, Instant.now(), emptyList()),
+        EventId("test_id", "test_book", "test_scope", Instant.now()),
+        "Logon",
+        mutableMapOf(),
+        PROTOCOL,
+        mutableMapOf(
+            "header" to mutableMapOf(
+                "MsgSeqNum" to 1,
+                "SenderCompID" to "SENDER",
+                "SendingTime" to "2025-07-01T03:30:59.831",
+                "TargetCompID" to "RECEIVER",
+                "BeginString" to "FIXT.1.1",
+                "BodyLength" to 82,
+                "MsgType" to "Logon"
+            ),
+            "EncryptMethod" to 0,
+            "HeartBtInt" to 30,
+            "ResetSeqNumFlag" to true,
+            "DefaultApplVerID" to "9",
+            "trailer" to mutableMapOf(
+                "CheckSum" to "229"
+            )
+        )
+    )
+
     @Suppress("UNCHECKED_CAST")
     private infix fun Map<String, Any?>.map(name: String): Map<String, Any?> = get(name) as Map<String, Any?>
     @Suppress("UNCHECKED_CAST")
@@ -1267,6 +1415,8 @@ class FixNgCodecTest {
         private const val VALUE_SHORT_CHECK_SUM = "3"
         private const val VALUE_TOO_BIG_CHECK_SUM = "999"
         private const val VALUE_INCORRECT_CHECK_SUM = "255"
+
+        private const val MSG_LOGON = "8=FIXT.1.19=8235=A49=SENDER56=RECEIVER34=152=20250701-03:30:59.83198=0108=30141=Y1137=910=213"
 
         private const val MSG_CORRECT = "8=FIXT.1.19=29535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=191"
         private const val MSG_WITH_SHORT_CHECK_SUM = "8=FIXT.1.19=29635=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=495504699911=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=$VALUE_SHORT_CHECK_SUM"
