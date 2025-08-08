@@ -19,7 +19,7 @@ jmh-generator-annprocess = { group = "org.openjdk.jmh", name = "jmh-generator-an
 jmh-generator-bytecode = { group = "org.openjdk.jmh", name = "jmh-generator-bytecode", version.ref = "jmh" }
 
 junit-bom = { group = "org.junit", name = "junit-bom", version = "5.13.2" }
-assertj-core = { group = "org.assertj", name = "assertj-core", version = "3.27.3" }
+assertj-core = { group = "org.assertj", name = "assertj-core", version = "3.27.4" }
 
 [plugins]
 th2-component = { id = "com.exactpro.th2.gradle.component", version.ref = "th2-plugin" }
