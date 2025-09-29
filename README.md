@@ -1,4 +1,4 @@
-# th2-codec-fix-ng 0.1.5
+# th2-codec-fix-ng 0.1.6
 
 This codec can be used in dirty mode for decoding and encoding messages via the FIX protocol.
 
@@ -129,6 +129,11 @@ spec:
 Component benchmark results available [here](docs/benchmarks/jmh-benchmark.md).
 
 ## Release notes
+
+### 0.1.6
+
++ Fixes:
+  + encoded typed value without error for STRING filed
 
 ### 0.1.5
 

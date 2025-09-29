@@ -506,16 +506,17 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
     }
 
     private fun encodeField(field: Field, value: Any, target: ByteBuf, isDirty: Boolean, dictionaryFields: Map<String, Field>, context: IReportingContext) {
-        when {
-            field is Primitive -> {
+        when (field) {
+            is Primitive -> {
                 val valueToEncode = when {
                     isCompatibleType(value.javaClass, field.primitiveType) -> value
+                    field.primitiveType == String::class.java -> value
                     value is String -> {
                         try {
                             when (field.primitiveType) {
-                                LocalDateTime::class.java -> MultiConverter.convert<LocalDateTime>(value, LocalDateTime::class.java)
-                                LocalDate::class.java -> MultiConverter.convert<LocalDate>(value, LocalDate::class.java)
-                                LocalTime::class.java -> MultiConverter.convert<LocalTime>(value, LocalTime::class.java)
+                                LocalDateTime::class.java -> MultiConverter.convert(value, LocalDateTime::class.java)
+                                LocalDate::class.java -> MultiConverter.convert(value, LocalDate::class.java)
+                                LocalTime::class.java -> MultiConverter.convert(value, LocalTime::class.java)
                                 java.lang.Boolean::class.java -> when {
                                     value.equals("true", true) -> true
                                     value.equals("Y", true) -> true // https://github.com/th2-net/th2-codec-fix-ng/issues/43
@@ -523,6 +524,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                                     value.equals("N", true) -> false // https://github.com/th2-net/th2-codec-fix-ng/issues/43
                                     else -> handleError(isDirty, context, "Wrong boolean value in ${field.primitiveType.name} field '$field.name'. Value: $value.", value)
                                 }
+
                                 else -> {
                                     // we reuse decode() method for the types that have the same string representation
                                     // of values in FIX protocol and in TH2 transport protocol
@@ -535,6 +537,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                             handleError(isDirty, context, "Wrong date/time value in ${field.primitiveType.name} field '$field.name'. Value: $value.", value)
                         }
                     }
+
                     else -> handleError(isDirty, context, "Wrong type value in field ${field.name}. Actual: ${value.javaClass} (value: $value). Expected ${field.primitiveType}", value)
                 }
 
@@ -555,8 +558,8 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 target.writeField(field.tag, stringValue, SOH_BYTE, charset)
             }
 
-            field is Group && value is List<*> -> field.encode(value, target, isDirty, dictionaryFields, context)
-            field is Message && value is Map<*,*> -> {
+            is Group if value is List<*> -> field.encode(value, target, isDirty, dictionaryFields, context)
+            is Message if value is Map<*,*> -> {
                 @Suppress("UNCHECKED_CAST")
                 val messageValue = value as Map<String, *>
                 field.encode(messageValue, target, isDirty, dictionaryFields, context)
@@ -711,7 +714,7 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
             java.lang.Short::class.java to 2,
             java.lang.Integer::class.java to 3,
             java.lang.Long::class.java to 4,
-            BigDecimal:: class.java to 5
+            BigDecimal::class.java to 5
         )
 
         private fun isCompatibleType(from: Class<*>, to: Class<*>): Boolean {
