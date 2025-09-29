@@ -31,7 +31,7 @@ data class FixNgCodecSettings(
     val decodeDelimiter: Char = SOH_CHAR,
     val dirtyMode: Boolean = false,
     val decodeValuesToStrings: Boolean = true,
-    val decodeComponentsToNestedMaps: Boolean = true
+    val decodeComponentsToNestedMaps: Boolean = true,
 ) : IPipelineCodecSettings
 
 object CharsetDeserializer : JsonDeserializer<Charset>() {

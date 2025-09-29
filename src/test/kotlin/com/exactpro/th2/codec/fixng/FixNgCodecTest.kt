@@ -18,6 +18,7 @@ package com.exactpro.th2.codec.fixng
 
 import com.exactpro.sf.common.messages.structures.IDictionaryStructure
 import com.exactpro.sf.common.messages.structures.loaders.XmlDictionaryStructureLoader
+import com.exactpro.sf.comparison.conversion.MultiConverter
 import com.exactpro.th2.codec.api.IReportingContext
 import com.exactpro.th2.codec.fixng.FixNgCodecFactory.Companion.PROTOCOL
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.Direction
@@ -68,6 +69,53 @@ class FixNgCodecTest {
     @ParameterizedTest
     @MethodSource("configs")
     fun `simple encode`(isDirty: Boolean, delimiter: Char) = encodeTest(MSG_CORRECT, isDirty, delimiter)
+
+    @ParameterizedTest
+    @CsvSource(
+        "true,java.lang.Character,a,,287,072",
+        "true,java.lang.Byte,127,,289,131",
+        "true,java.lang.Short,32767,,291,235",
+        "true,java.lang.Integer,2147483647,,296,245",
+        "true,java.lang.Long,9223372036854775807,,305,198",
+        "true,java.lang.Float,3.4028234,,295,174",
+        "true,java.lang.Double,1.7976931348623157,,304,141",
+        "true,java.math.BigDecimal,1.7976931348623157,,304,141",
+        "true,java.time.LocalDateTime,2025-09-29T14:07:53.168966352,20250929-14:07:53.168966352,313,091",
+        "true,java.time.LocalDate,2025-09-29,20250929,294,130",
+        "true,java.time.LocalTime,14:07:53.168,,298,094", // FIXME: Seconds unit should depend of settings
+        "true,java.lang.Boolean,true,Y,287,064",
+
+        "false,java.lang.Character,a,,287,072",
+        "false,java.lang.Byte,127,,289,131",
+        "false,java.lang.Short,32767,,291,235",
+        "false,java.lang.Integer,2147483647,,296,245",
+        "false,java.lang.Long,9223372036854775807,,305,198",
+        "false,java.lang.Float,3.4028234,,295,174",
+        "false,java.lang.Double,1.7976931348623157,,304,141",
+        "false,java.math.BigDecimal,1.7976931348623157,,304,141",
+        "false,java.time.LocalDateTime,2025-09-29T14:07:53.168966352,20250929-14:07:53.168966352,313,091",
+        "false,java.time.LocalDate,2025-09-29,20250929,294,130",
+        "false,java.time.LocalTime,14:07:53.168,,298,094", // FIXME: Seconds unit should depend of settings
+        "false,java.lang.Boolean,true,Y,287,064",
+    )
+    fun `encode with different value types for string field`(
+        isDirty: Boolean,
+        clazz: Class<*>,
+        value: String,
+        encodedValue: String?,
+        length: Int,
+        checkSum: String,
+    ) {
+        parsedBody["ExecID"] = MultiConverter.convert(value, clazz)
+        encodeTest(
+            MSG_CORRECT
+                .replace("17=495504662", "17=${encodedValue ?: value}")
+                .replace("9=295", "9=${length}")
+                .replace("10=191", "10=${checkSum}"),
+            dirtyMode = isDirty,
+            '',
+        )
+    }
 
     @ParameterizedTest
     @MethodSource("configs")
@@ -297,6 +345,7 @@ class FixNgCodecTest {
 
     @ParameterizedTest
     @ValueSource(chars = ['', '|'])
+    @Suppress("SpellCheckingInspection")
     fun `tags with 0 prefix decode (dirty)`(delimiter: Char) {
         with(parsedMessage) {
             (body map "header").set("BodyLength", 302)
@@ -1007,7 +1056,7 @@ class FixNgCodecTest {
         return FixNgCodec(dictionary, FixNgCodecSettings(
             dictionary = "",
             decodeValuesToStrings = decodeValuesToStrings,
-            decodeDelimiter = delimiter
+            decodeDelimiter = delimiter,
         ))
     }
 
@@ -1031,7 +1080,7 @@ class FixNgCodecTest {
         parsedMessage: ParsedMessage,
         delimiter: Char,
         expectedWarning: String? = null,
-        encodeFromStringValues: Boolean = false
+        encodeFromStringValues: Boolean = false,
     ) {
         val parsedBody = parsedMessage.body as MutableMap<String, Any?>
 
@@ -1057,7 +1106,7 @@ class FixNgCodecTest {
         parsedMessage: ParsedMessage,
         delimiter: Char,
         expectedError: String? = null,
-        encodeFromStringValues: Boolean = false
+        encodeFromStringValues: Boolean = false,
     ) {
         val parsedBody = parsedMessage.body as MutableMap<String, Any?>
 
@@ -1192,6 +1241,7 @@ class FixNgCodecTest {
         else -> value.toString()
     }
 
+    @Suppress("SpellCheckingInspection")
     private val parsedMessage = ParsedMessage(
         MessageId("test_alias", Direction.OUTGOING, 0L, Instant.now(), emptyList()),
         EventId("test_id", "test_book", "test_scope", Instant.now()),
@@ -1249,6 +1299,7 @@ class FixNgCodecTest {
 
     private val parsedBody: MutableMap<String, Any?> = parsedMessage.body as MutableMap
 
+    @Suppress("SpellCheckingInspection")
     private val expectedMessageWithoutBody = ParsedMessage(
         MessageId("test_alias", Direction.OUTGOING, 0L, Instant.now(), emptyList()),
         EventId("test_id", "test_book", "test_scope", Instant.now()),
@@ -1271,6 +1322,7 @@ class FixNgCodecTest {
         )
     )
 
+    @Suppress("SpellCheckingInspection")
     private val parsedMessageWithNestedComponents = ParsedMessage(
         MessageId("test_alias", Direction.OUTGOING, 0L, Instant.now(), emptyList()),
         EventId("test_id", "test_book", "test_scope", Instant.now()),
@@ -1300,6 +1352,7 @@ class FixNgCodecTest {
     )
     private val parsedBodyWithNestedComponents: MutableMap<String, Any?> = parsedMessageWithNestedComponents.body as MutableMap
 
+    @Suppress("SpellCheckingInspection")
     private val parsedMessageWithNestedGroups = ParsedMessage(
         MessageId("test_alias", Direction.OUTGOING, 0L, Instant.now(), emptyList()),
         EventId("test_id", "test_book", "test_scope", Instant.now()),
@@ -1368,6 +1421,7 @@ class FixNgCodecTest {
         )
     )
 
+    @Suppress("SpellCheckingInspection")
     private val parsedLogon = ParsedMessage(
         MessageId("test_alias", Direction.OUTGOING, 0L, Instant.now(), emptyList()),
         EventId("test_id", "test_book", "test_scope", Instant.now()),
