@@ -134,6 +134,12 @@ Component benchmark results available [here](docs/benchmarks/jmh-benchmark.md).
 
 + Fixes:
   + encoded typed value without error for STRING filed
++ Updated:
+  + th2 gradle plugin: `0.3.8` (bom: `4.14.1`)
+  + kotlin: `2.2.10`
+  + kotlin-logging: `7.0.13`
+  + common: `5.16.1-dev`
+  + codec: `5.6.0-dev`
 
 ### 0.1.5
 
