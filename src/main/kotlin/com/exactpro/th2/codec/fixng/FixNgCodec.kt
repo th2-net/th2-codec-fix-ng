@@ -23,7 +23,6 @@ import com.exactpro.sf.common.messages.structures.IDictionaryStructure
 import com.exactpro.sf.common.messages.structures.IFieldStructure
 import com.exactpro.sf.common.messages.structures.IMessageStructure
 import com.exactpro.sf.common.messages.structures.StructureUtils
-import com.exactpro.sf.comparison.conversion.MultiConverter
 import com.exactpro.th2.codec.api.IPipelineCodec
 import com.exactpro.th2.codec.api.IReportingContext
 import com.exactpro.th2.codec.fixng.FixNgCodecFactory.Companion.PROTOCOL
@@ -37,10 +36,7 @@ import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeFormatterBuilder
 import java.time.format.DateTimeParseException
-import java.time.temporal.ChronoField
 import java.util.EnumMap
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.Message as CommonMessage
 
@@ -430,9 +426,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 java.lang.Float::class.java -> value.toFloat()
                 java.lang.Double::class.java -> value.toDouble()
 
-                java.time.LocalDateTime::class.java -> LocalDateTime.parse(value, dateTimeFormatter)
-                java.time.LocalDate::class.java -> LocalDate.parse(value, dateFormatter)
-                java.time.LocalTime::class.java -> LocalTime.parse(value, timeFormatter)
+                java.time.LocalDateTime::class.java -> DATE_TIME_AUTO.parse(value)
+                java.time.LocalDate::class.java -> DATE.parse(value)
+                java.time.LocalTime::class.java -> TIME_AUTO.parse(value)
 
                 java.lang.Boolean::class.java -> when (value) {
                     "Y" -> true
@@ -514,9 +510,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                     value is String -> {
                         try {
                             when (field.primitiveType) {
-                                LocalDateTime::class.java -> MultiConverter.convert(value, LocalDateTime::class.java)
-                                LocalDate::class.java -> MultiConverter.convert(value, LocalDate::class.java)
-                                LocalTime::class.java -> MultiConverter.convert(value, LocalTime::class.java)
+                                LocalDateTime::class.java -> checkAndFormat<LocalDateTime>(value)
+                                LocalDate::class.java -> checkAndFormat<LocalDate>(value)
+                                LocalTime::class.java -> checkAndFormat<LocalTime>(value)
                                 java.lang.Boolean::class.java -> when {
                                     value.equals("true", true) -> true
                                     value.equals("Y", true) -> true // https://github.com/th2-net/th2-codec-fix-ng/issues/43
@@ -542,9 +538,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 }
 
                 val stringValue = when (valueToEncode) {
-                    is LocalDateTime -> valueToEncode.format(dateTimeFormatter)
-                    is LocalDate -> valueToEncode.format(dateFormatter)
-                    is LocalTime -> valueToEncode.format(timeFormatter)
+                    is LocalDateTime -> DATE_TIME_AUTO.format(valueToEncode)
+                    is LocalDate -> DATE.format(valueToEncode)
+                    is LocalTime -> TIME_AUTO.format(valueToEncode)
                     is java.lang.Boolean -> if (valueToEncode.booleanValue()) "Y" else "N"
                     else -> valueToEncode.toString()
                 }
@@ -689,18 +685,6 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
 
         private fun containsNonPrintableChars(stringValue: String) = stringValue.any { it !in ' ' .. '~' }
         private val calculatedFields = intArrayOf(TAG_BEGIN_STRING, TAG_BODY_LENGTH, TAG_MSG_TYPE, TAG_CHECKSUM)
-
-        private val dateTimeFormatter = DateTimeFormatterBuilder()
-            .appendPattern("yyyyMMdd-HH:mm:ss")
-            .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
-            .toFormatter()
-
-        private val dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
-
-        private val timeFormatter = DateTimeFormatterBuilder()
-            .appendPattern("HH:mm:ss")
-            .appendFraction(ChronoField.MILLI_OF_SECOND, 0, 9, true)
-            .toFormatter()
 
         private val javaTypeToClass = EnumMap<JavaType, Class<*>>(JavaType::class.java).apply {
             for (type in JavaType.entries) {

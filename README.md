@@ -1,4 +1,4 @@
-# th2-codec-fix-ng 0.1.6
+# th2-codec-fix-ng 0.1.7
 
 This codec can be used in dirty mode for decoding and encoding messages via the FIX protocol.
 
@@ -130,10 +130,15 @@ Component benchmark results available [here](docs/benchmarks/jmh-benchmark.md).
 
 ## Release notes
 
-### 0.1.6
+### 0.1.7
 
 + Fixes:
-  + encoded typed value without error for STRING filed
+  + [[GH-71] Truncates trailed zeros in sub second part for local date time fields](https://github.com/th2-net/th2-codec-fix-ng/issues/71)
+
+### 0.1.6
+
++ Fixes: 
+  + [[GH-68] encoded typed value without error for STRING filed](https://github.com/th2-net/th2-codec-fix-ng/issues/68)
 + Updated:
   + th2 gradle plugin: `0.3.8` (bom: `4.14.1`)
   + kotlin: `2.2.10`
