@@ -16,9 +16,12 @@
 
 package com.exactpro.th2.codec.fixng
 
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.ValueSource
+import java.time.DateTimeException
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -33,6 +36,21 @@ class TimeUtilTest {
     }
 
     @ParameterizedTest
+    @ValueSource(
+        strings = [
+            "2025-09-29T14:07:53.123456789123",
+            "2025-09-29T14:07:53.123456789123Z",
+        ]
+    )
+    fun `check and format date time with picoseconds`(isoValue: String) {
+        assertThrows<DateTimeException> {
+            checkAndFormat<LocalDateTime>(isoValue)
+        }.also {
+            assertEquals("Text '$isoValue' could not be parsed, unparsed text found at index 29", it.message)
+        }
+    }
+
+    @ParameterizedTest
     @MethodSource("check-and-format-date-time")
     fun `check and format date time with Z`(isoValue: String, expected: String) {
         assertEquals(expected, checkAndFormat<LocalDateTime>("${isoValue}Z"))
@@ -42,6 +60,21 @@ class TimeUtilTest {
     @MethodSource("check-and-format-time")
     fun `check and format time`(isoValue: String, expected: String) {
         assertEquals(expected, checkAndFormat<LocalTime>(isoValue))
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+        strings = [
+            "14:07:53.123456789123",
+            "14:07:53.123456789123Z",
+        ]
+    )
+    fun `check and format time with picoseconds`(isoValue: String) {
+        assertThrows<DateTimeException> {
+            checkAndFormat<LocalTime>(isoValue)
+        }.also {
+            assertEquals("Text '$isoValue' could not be parsed, unparsed text found at index 18", it.message)
+        }
     }
 
     @ParameterizedTest
@@ -61,55 +94,55 @@ class TimeUtilTest {
     fun `check and format date with Z`(isoValue: String, expected: String) {
         assertEquals(expected, checkAndFormat<LocalDate>("${isoValue}Z"))
     }
-    
+
     companion object {
         @JvmStatic
         fun `check-and-format-date-time`() = listOf(
-            Arguments.of("2025-09-29T14:07:53.123456789","20250929-14:07:53.123456789"),
-            Arguments.of("2025-09-29T14:07:53.123456780","20250929-14:07:53.123456780"),
-            Arguments.of("2025-09-29T14:07:53.123456700","20250929-14:07:53.123456700"),
-            Arguments.of("2025-09-29T14:07:53.123456000","20250929-14:07:53.123456000"),
-            Arguments.of("2025-09-29T14:07:53.123450000","20250929-14:07:53.123450000"),
-            Arguments.of("2025-09-29T14:07:53.123400000","20250929-14:07:53.123400000"),
-            Arguments.of("2025-09-29T14:07:53.123000000","20250929-14:07:53.123000000"),
-            Arguments.of("2025-09-29T14:07:53.120000000","20250929-14:07:53.120000000"),
-            Arguments.of("2025-09-29T14:07:53.100000000","20250929-14:07:53.100000000"),
-            Arguments.of("2025-09-29T14:07:53.000000000","20250929-14:07:53.000000000"),
+            Arguments.of("2025-09-29T14:07:53.123456789", "20250929-14:07:53.123456789"),
+            Arguments.of("2025-09-29T14:07:53.123456780", "20250929-14:07:53.123456780"),
+            Arguments.of("2025-09-29T14:07:53.123456700", "20250929-14:07:53.123456700"),
+            Arguments.of("2025-09-29T14:07:53.123456000", "20250929-14:07:53.123456000"),
+            Arguments.of("2025-09-29T14:07:53.123450000", "20250929-14:07:53.123450000"),
+            Arguments.of("2025-09-29T14:07:53.123400000", "20250929-14:07:53.123400000"),
+            Arguments.of("2025-09-29T14:07:53.123000000", "20250929-14:07:53.123000000"),
+            Arguments.of("2025-09-29T14:07:53.120000000", "20250929-14:07:53.120000000"),
+            Arguments.of("2025-09-29T14:07:53.100000000", "20250929-14:07:53.100000000"),
+            Arguments.of("2025-09-29T14:07:53.000000000", "20250929-14:07:53.000000000"),
 
-            Arguments.of("2025-09-29T14:07:53.12345","20250929-14:07:53.123450"),
-            Arguments.of("2025-09-29T14:07:53.1234","20250929-14:07:53.123400"),
+            Arguments.of("2025-09-29T14:07:53.12345", "20250929-14:07:53.123450"),
+            Arguments.of("2025-09-29T14:07:53.1234", "20250929-14:07:53.123400"),
 
-            Arguments.of("2025-09-29T14:07:53.12","20250929-14:07:53.120"),
-            Arguments.of("2025-09-29T14:07:53.1","20250929-14:07:53.100"),
+            Arguments.of("2025-09-29T14:07:53.12", "20250929-14:07:53.120"),
+            Arguments.of("2025-09-29T14:07:53.1", "20250929-14:07:53.100"),
 
-            Arguments.of("2025-09-29T14:07:53","20250929-14:07:53"),
+            Arguments.of("2025-09-29T14:07:53", "20250929-14:07:53"),
         )
 
         @JvmStatic
         fun `check-and-format-time`() = listOf(
-            Arguments.of("14:07:53.123456789","14:07:53.123456789"),
-            Arguments.of("14:07:53.123456780","14:07:53.123456780"),
-            Arguments.of("14:07:53.123456700","14:07:53.123456700"),
-            Arguments.of("14:07:53.123456000","14:07:53.123456000"),
-            Arguments.of("14:07:53.123450000","14:07:53.123450000"),
-            Arguments.of("14:07:53.123400000","14:07:53.123400000"),
-            Arguments.of("14:07:53.123000000","14:07:53.123000000"),
-            Arguments.of("14:07:53.120000000","14:07:53.120000000"),
-            Arguments.of("14:07:53.100000000","14:07:53.100000000"),
-            Arguments.of("14:07:53.000000000","14:07:53.000000000"),
+            Arguments.of("14:07:53.123456789", "14:07:53.123456789"),
+            Arguments.of("14:07:53.123456780", "14:07:53.123456780"),
+            Arguments.of("14:07:53.123456700", "14:07:53.123456700"),
+            Arguments.of("14:07:53.123456000", "14:07:53.123456000"),
+            Arguments.of("14:07:53.123450000", "14:07:53.123450000"),
+            Arguments.of("14:07:53.123400000", "14:07:53.123400000"),
+            Arguments.of("14:07:53.123000000", "14:07:53.123000000"),
+            Arguments.of("14:07:53.120000000", "14:07:53.120000000"),
+            Arguments.of("14:07:53.100000000", "14:07:53.100000000"),
+            Arguments.of("14:07:53.000000000", "14:07:53.000000000"),
 
-            Arguments.of("14:07:53.12345","14:07:53.123450"),
-            Arguments.of("14:07:53.1234","14:07:53.123400"),
+            Arguments.of("14:07:53.12345", "14:07:53.123450"),
+            Arguments.of("14:07:53.1234", "14:07:53.123400"),
 
-            Arguments.of("14:07:53.12","14:07:53.120"),
-            Arguments.of("14:07:53.1","14:07:53.100"),
+            Arguments.of("14:07:53.12", "14:07:53.120"),
+            Arguments.of("14:07:53.1", "14:07:53.100"),
 
-            Arguments.of("14:07:53","14:07:53"),
+            Arguments.of("14:07:53", "14:07:53"),
         )
 
         @JvmStatic
         fun `check-and-format-date`() = listOf(
-            Arguments.of("2025-09-29","20250929"),
+            Arguments.of("2025-09-29", "20250929"),
         )
 
     }
