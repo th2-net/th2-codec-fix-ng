@@ -118,6 +118,44 @@ class FixNgCodecTest {
     }
 
     @ParameterizedTest
+    @CsvSource(
+        "2025-09-29T14:07:53.123456789,20250929-14:07:53.123456789,298,130",
+        "2025-09-29T14:07:53.123456780,20250929-14:07:53.123456780,298,121",
+        "2025-09-29T14:07:53.123456700,20250929-14:07:53.123456700,298,113",
+        "2025-09-29T14:07:53.123456000,20250929-14:07:53.123456000,298,106",
+        "2025-09-29T14:07:53.123450000,20250929-14:07:53.123450000,298,100",
+        "2025-09-29T14:07:53.123400000,20250929-14:07:53.123400000,298,095",
+        "2025-09-29T14:07:53.123000000,20250929-14:07:53.123000000,298,091",
+        "2025-09-29T14:07:53.120000000,20250929-14:07:53.120000000,298,088",
+        "2025-09-29T14:07:53.100000000,20250929-14:07:53.100000000,298,086",
+        "2025-09-29T14:07:53.000000000,20250929-14:07:53.000000000,298,085",
+
+        "2025-09-29T14:07:53.12345,20250929-14:07:53.123450,295,209",
+        "2025-09-29T14:07:53.1234,20250929-14:07:53.123400,295,204",
+
+        "2025-09-29T14:07:53.12,20250929-14:07:53.120,292,050",
+        "2025-09-29T14:07:53.1,20250929-14:07:53.100,292,048",
+
+        "2025-09-29T14:07:53,20250929-14:07:53,288,118",
+    )
+    fun `encode local date time value with trailing zeros`(
+        value: String,
+        encodedValue: String,
+        length: Int,
+        checkSum: String,
+    ) {
+        parsedBody["TransactTime"] = value
+        encodeTest(
+            MSG_CORRECT
+                .replace("60=20180205-10:38:08.000008", "60=${encodedValue}")
+                .replace("9=295", "9=${length}")
+                .replace("10=191", "10=${checkSum}"),
+            dirtyMode = false,
+            '',
+        )
+    }
+
+    @ParameterizedTest
     @MethodSource("configs")
     fun `simple encode from string values`(isDirty: Boolean, delimiter: Char) =
         encodeTest(MSG_CORRECT, isDirty, delimiter, encodeFromStringValues = true)
@@ -1506,7 +1544,7 @@ class FixNgCodecTest {
         private const val MSG_NESTED_OPT_COMPONENTS_MISSED_ALL_OUTER_FIELDS_AND_REQ_INNER_FIELD = "8=FIXT.1.19=4535=TEST_249=MZHOT056=INET34=12558=text_110=073"
 
         private const val MSG_NESTED_GROUPS = "8=FIXT.1.19=8835=TEST_349=MZHOT056=INET34=12573=2398=3399=1399=2399=3398=3399=3399=2399=110=211"
-        private const val MSG_TIME_ZONE = "8=FIXT.1.19=12335=TEST_449=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508860=20180205-10:38:08.000008449=20180205450=10:38:0810=206"
+        private const val MSG_TIME_ZONE = "8=FIXT.1.19=13035=TEST_449=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508860=20180205-10:38:08.000008449=20180205450=10:38:08.00000810=034"
 
         @JvmStatic
         fun configs() = listOf(
