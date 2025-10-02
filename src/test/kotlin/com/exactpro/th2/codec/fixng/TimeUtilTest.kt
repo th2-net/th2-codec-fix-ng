@@ -20,7 +20,6 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
-import org.junit.jupiter.params.provider.ValueSource
 import java.time.DateTimeException
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -36,12 +35,13 @@ class TimeUtilTest {
     }
 
     @ParameterizedTest
-    @ValueSource(
-        strings = [
-            "2025-09-29T14:07:53.123456789123",
-            "2025-09-29T14:07:53.123456789123Z",
-        ]
-    )
+    @MethodSource("check-and-format-date-time")
+    fun `check and format date time with Z`(isoValue: String, expected: String) {
+        assertEquals(expected, checkAndFormat<LocalDateTime>("${isoValue}Z"))
+    }
+
+    @ParameterizedTest
+    @MethodSource("check-and-format-date-time-pico")
     fun `check and format date time with picoseconds`(isoValue: String) {
         assertThrows<DateTimeException> {
             checkAndFormat<LocalDateTime>(isoValue)
@@ -51,9 +51,13 @@ class TimeUtilTest {
     }
 
     @ParameterizedTest
-    @MethodSource("check-and-format-date-time")
-    fun `check and format date time with Z`(isoValue: String, expected: String) {
-        assertEquals(expected, checkAndFormat<LocalDateTime>("${isoValue}Z"))
+    @MethodSource("check-and-format-date-time-pico")
+    fun `check and format date time with picoseconds and Z`(isoValue: String) {
+        assertThrows<DateTimeException> {
+            checkAndFormat<LocalDateTime>("${isoValue}Z")
+        }.also {
+            assertEquals("Text '${isoValue}Z' could not be parsed, unparsed text found at index 29", it.message)
+        }
     }
 
     @ParameterizedTest
@@ -63,12 +67,13 @@ class TimeUtilTest {
     }
 
     @ParameterizedTest
-    @ValueSource(
-        strings = [
-            "14:07:53.123456789123",
-            "14:07:53.123456789123Z",
-        ]
-    )
+    @MethodSource("check-and-format-time")
+    fun `check and format time with Z`(isoValue: String, expected: String) {
+        assertEquals(expected, checkAndFormat<LocalTime>("${isoValue}Z"))
+    }
+
+    @ParameterizedTest
+    @MethodSource("check-and-format-time-pico")
     fun `check and format time with picoseconds`(isoValue: String) {
         assertThrows<DateTimeException> {
             checkAndFormat<LocalTime>(isoValue)
@@ -78,9 +83,13 @@ class TimeUtilTest {
     }
 
     @ParameterizedTest
-    @MethodSource("check-and-format-time")
-    fun `check and format time with Z`(isoValue: String, expected: String) {
-        assertEquals(expected, checkAndFormat<LocalTime>("${isoValue}Z"))
+    @MethodSource("check-and-format-time-pico")
+    fun `check and format time with picoseconds and Z`(isoValue: String) {
+        assertThrows<DateTimeException> {
+            checkAndFormat<LocalTime>("${isoValue}Z")
+        }.also {
+            assertEquals("Text '${isoValue}Z' could not be parsed, unparsed text found at index 18", it.message)
+        }
     }
 
     @ParameterizedTest
@@ -119,6 +128,13 @@ class TimeUtilTest {
         )
 
         @JvmStatic
+        fun `check-and-format-date-time-pico`() = listOf(
+            Arguments.of("2025-09-29T14:07:53.123456789123"),
+            Arguments.of("2025-09-29T14:07:53.12345678912"),
+            Arguments.of("2025-09-29T14:07:53.1234567891"),
+        )
+
+        @JvmStatic
         fun `check-and-format-time`() = listOf(
             Arguments.of("14:07:53.123456789", "14:07:53.123456789"),
             Arguments.of("14:07:53.123456780", "14:07:53.123456780"),
@@ -138,6 +154,13 @@ class TimeUtilTest {
             Arguments.of("14:07:53.1", "14:07:53.100"),
 
             Arguments.of("14:07:53", "14:07:53"),
+        )
+
+        @JvmStatic
+        fun `check-and-format-time-pico`() = listOf(
+            Arguments.of("14:07:53.123456789123"),
+            Arguments.of("14:07:53.12345678912"),
+            Arguments.of("14:07:53.1234567891"),
         )
 
         @JvmStatic
