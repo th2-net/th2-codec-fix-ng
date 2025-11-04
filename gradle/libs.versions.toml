@@ -18,7 +18,7 @@ jmh-core = { group = "org.openjdk.jmh", name = "jmh-core", version.ref = "jmh" }
 jmh-generator-annprocess = { group = "org.openjdk.jmh", name = "jmh-generator-annprocess", version.ref = "jmh" }
 jmh-generator-bytecode = { group = "org.openjdk.jmh", name = "jmh-generator-bytecode", version.ref = "jmh" }
 
-junit-bom = { group = "org.junit", name = "junit-bom", version = "5.13.4" }
+junit-bom = { group = "org.junit", name = "junit-bom", version = "6.0.1" }
 assertj-core = { group = "org.assertj", name = "assertj-core", version = "3.27.6" }
 
 [plugins]
