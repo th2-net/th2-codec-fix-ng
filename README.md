@@ -1,4 +1,4 @@
-# th2-codec-fix-ng 0.1.7
+# th2-codec-fix-ng 0.1.8
 
 This codec can be used in dirty mode for decoding and encoding messages via the FIX protocol.
 
@@ -129,6 +129,15 @@ spec:
 Component benchmark results available [here](docs/benchmarks/jmh-benchmark.md).
 
 ## Release notes
+
+### 0.1.8
+
++ Produce multi-platform docker image
+  + migrated to [amazoncorretto:11-alpine-jdk](https://hub.docker.com/layers/library/amazoncorretto/11-alpine-jdk) docker image as base
++ Updated:
+  + th2 gradle plugin: `0.3.10` (bom: `4.14.2`)
+  + th2 codec: `5.6.1-dev`
+  + kotlin: `2.2.21`
 
 ### 0.1.7
 
