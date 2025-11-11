@@ -204,11 +204,11 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 return
             }
             val value = buffer.readValue(decodeDelimiter, charset, isDirty)
-            val valueSize = value.toByteArray(charset).size
-            if (valueSize != 3) {
+            val valueLength = value.length
+            if (valueLength != 3) {
                 handleError(
                     isDirty, context,
-                    "CheckSum ($TAG_CHECKSUM) field must have 3 bytes length, instead of size: $valueSize, value: '$value'",
+                    "CheckSum ($TAG_CHECKSUM) field must have 3 bytes length, instead of size: $valueLength, value: '$value'",
                 )
                 return
             }
