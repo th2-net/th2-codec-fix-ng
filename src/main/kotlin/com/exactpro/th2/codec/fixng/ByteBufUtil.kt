@@ -28,7 +28,6 @@ const val DIGIT_9 = '9'.code.toByte()
 const val SOH_CHAR = ''
 const val SOH_BYTE = SOH_CHAR.code.toByte()
 
-@Suppress("KotlinConstantConditions")
 private fun Int.getDigitCount(): Int = when {
     this < 10 -> 1
     this < 100 -> 2
@@ -149,13 +148,11 @@ fun ByteBuf.writeChecksum(delimiter: Byte) {
 }
 
 fun ByteBuf.calculateChecksum(delimiter: Byte): Int {
-    val index = readerIndex()
     var checksum = 0
-    while (isReadable) {
-        val value = readByte()
+    forEachByte { value ->
         checksum += if (value == delimiter) SOH_BYTE else value
+        return@forEachByte true
     }
-    readerIndex(index)
     return checksum % 256
 }
 
