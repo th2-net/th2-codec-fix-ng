@@ -35,6 +35,24 @@ repositories {
         }
     }
 
+    maven {
+        name 'Sonatype_snapshot'
+        url 'https://central.sonatype.com/repository/maven-snapshots/'
+        content {
+            excludeSailfish(it)
+        }
+    }
+
+    maven {
+        name 'Sonatype_snapshot'
+        url 'https://central.sonatype.com/repository/maven-snapshots/'
+        metadataSources {
+            mavenPom()
+            artifact()
+            ignoreGradleMetadataRedirection()
+        }
+    }
+
     mavenCentral()
     mavenLocal()
 
