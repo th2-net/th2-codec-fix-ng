@@ -7371,27 +7371,35 @@
             <attribute name="entity_type" type="java.lang.String">Message</attribute>
             <attribute name="IsAdmin" type="java.lang.Boolean">false</attribute>
             <attribute name="MessageType" type="java.lang.String">TEST_1</attribute>
+            <field name="header" reference="header" required="true"/>
             <field name="OuterComponent" reference="component-OuterComponent" required="true"/>
+            <field name="trailer" reference="trailer" required="true"/>
         </message>
         <message name="NestedOptionalComponentTestMessage">
             <attribute name="entity_type" type="java.lang.String">Message</attribute>
             <attribute name="IsAdmin" type="java.lang.Boolean">false</attribute>
             <attribute name="MessageType" type="java.lang.String">TEST_2</attribute>
+            <field name="header" reference="header" required="true"/>
             <field name="OuterComponent" reference="component-OuterComponent"/>
+            <field name="trailer" reference="trailer" required="true"/>
         </message>
         <message name="NestedGroupsTestMessage">
             <attribute name="entity_type" type="java.lang.String">Message</attribute>
             <attribute name="IsAdmin" type="java.lang.Boolean">false</attribute>
             <attribute name="MessageType" type="java.lang.String">TEST_3</attribute>
+            <field name="header" reference="header" required="true"/>
             <field name="OuterGroup" reference="component-OuterGroup"/>
+            <field name="trailer" reference="trailer" required="true"/>
         </message>
         <message name="TimeZoneTestMessage">
             <attribute name="entity_type" type="java.lang.String">Message</attribute>
             <attribute name="IsAdmin" type="java.lang.Boolean">false</attribute>
             <attribute name="MessageType" type="java.lang.String">TEST_4</attribute>
+            <field name="header" reference="header" required="true"/>
             <field name="TransactTime" reference="field-TransactTime" required="true"/>
             <field name="TotalVolumeTradedDate" reference="field-TotalVolumeTradedDate" required="true"/>
             <field name="TotalVolumeTradedTime" reference="field-TotalVolumeTradedTime" required="true"/>
+            <field name="trailer" reference="trailer" required="true"/>
         </message>
         <message id="component-OuterComponent" name="OuterComponent">
             <attribute name="entity_type" type="java.lang.String">Component</attribute>
