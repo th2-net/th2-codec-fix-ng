@@ -467,13 +467,11 @@ class FixNgCodecTest {
     @ValueSource(chars = ['', '|'])
     fun `decode with addition field that exists in dictionary (non dirty)`(delimiter: Char) {
         parsedBody["CFICode"] = "12345"
-        // note: Unknown tag in the message causes the processing of messages to stop and moves on to the next part of
-        // the message. As a result, required tags remain unread, which leads to the following error.
         decodeTest(
             MSG_ADDITIONAL_FIELD_DICT,
             dirtyMode = false,
             delimiter = delimiter,
-            expectedErrors = listOf("Required tag missing. Tag: 10."),
+            expectedErrors = listOf("Unexpected field in message. Message type: 8. Field tag: 461. Field name: CFICode"),
         )
     }
 
@@ -508,13 +506,11 @@ class FixNgCodecTest {
     @ValueSource(chars = ['', '|'])
     fun `decode with addition field that does not exists in dictionary (non dirty)`(delimiter: Char) {
         parsedBody["9999"] = "54321"
-        // note: Unknown tag in the message causes the processing of messages to stop and moves on to the next part of
-        // the message. As a result, required tags remain unread, which leads to the following error.
         decodeTest(
             MSG_ADDITIONAL_FIELD_NO_DICT,
             dirtyMode = false,
             delimiter = delimiter,
-            expectedErrors = listOf("Required tag missing. Tag: 10."),
+            expectedErrors = listOf("Field does not exist in dictionary. Field tag: 9999"),
         )
     }
 
@@ -787,7 +783,7 @@ class FixNgCodecTest {
     fun `tag appears out of order (dirty)`(delimiter: Char) {
         with(parsedMessage) {
             body remove "OuterComponent"
-            (body map "trailer").set("LegUnitOfMeasure", "500")
+            (body map "trailer").set("MinQty", BigDecimal(500))
             (body map "header").set("BodyLength", 295)
             (body map "trailer").set("CheckSum", "000")
             decodeTest(
@@ -796,8 +792,8 @@ class FixNgCodecTest {
                 delimiter = delimiter,
                 expectedMessage = this,
                 expectedErrors = listOf(
-                    "Unexpected field in message. Field name: LegUnitOfMeasure. Field value: 500",
-                    "Message ends with 999 tag instead of CheckSum (10)",
+                    "Unexpected field in message. Field name: MinQty. Field value: 500",
+                    "Message ends with 110 tag instead of CheckSum (10)",
                 ),
             )
         }
@@ -810,7 +806,7 @@ class FixNgCodecTest {
             MSG_TAG_OUT_OF_ORDER,
             dirtyMode = false,
             delimiter = delimiter,
-            expectedErrors = listOf("Tag appears out of order: 999"),
+            expectedErrors = listOf("Tag appears out of order: 110"),
         )
     }
 
@@ -1531,7 +1527,7 @@ class FixNgCodecTest {
         private const val MSG_EMPTY_VAL = "8=FIXT.1.19=29135=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=251"
         private const val MSG_NON_PRINTABLE = "8=FIXT.1.19=30335=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test\taccount40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=171"
         private const val MSG_REQUIRED_HEADER_REMOVED = "8=FIXT.1.19=23635=817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=050"
-        private const val MSG_TAG_OUT_OF_ORDER = "8=FIXT.1.19=29535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=000999=500"
+        private const val MSG_TAG_OUT_OF_ORDER = "8=FIXT.1.19=29535=849=SENDER56=RECEIVER34=1094752=20230419-10:36:07.41508817=49550466211=zSuNbrBIZyVljs41=zSuNbrBIZyVljs37=49415882150=039=0151=50014=50048=NWDR22=8453=2448=NGALL1FX01447=D452=76448=0447=P452=31=test40=A59=054=B55=ABC38=50044=100047=50060=20180205-10:38:08.00000810=000110=500"
 
         private const val MSG_NESTED_REQ_COMPONENTS = "8=FIXT.1.19=5935=TEST_149=MZHOT056=INET34=12558=text_140=1151=123410=191"
         private const val MSG_NESTED_REQ_COMPONENTS_MISSED_REQ = "8=FIXT.1.19=5435=TEST_149=MZHOT056=INET34=12558=text_1151=123410=231"

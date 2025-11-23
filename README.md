@@ -1,4 +1,4 @@
-# th2-codec-fix-ng 0.1.8
+# th2-codec-fix-ng 0.1.9
 
 This codec can be used in dirty mode for decoding and encoding messages via the FIX protocol.
 
@@ -129,6 +129,11 @@ spec:
 Component benchmark results available [here](docs/benchmarks/jmh-benchmark.md).
 
 ## Release notes
+
+### 0.1.9
+
++ Fixes:
+  + [[GH-82] Unknown / expedited tag cases are handled incorrectly](https://github.com/th2-net/th2-codec-fix-ng/issues/82)
 
 ### 0.1.8
 
