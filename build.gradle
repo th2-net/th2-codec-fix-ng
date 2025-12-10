@@ -37,15 +37,9 @@ repositories {
 
     mavenCentral()
     mavenLocal()
-
-    configurations.configureEach {
-        resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
-        resolutionStrategy.cacheDynamicVersionsFor 0, 'seconds'
-    }
 }
 
 dependencies {
-    implementation(libs.th2.common)
     implementation(libs.th2.codec)
 
     implementation (libs.sailfish.common) {
