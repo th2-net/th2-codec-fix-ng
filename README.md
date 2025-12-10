@@ -133,6 +133,7 @@ Component benchmark results available [here](docs/benchmarks/jmh-benchmark.md).
 ### 0.1.9
 
 + Fixes:
+  + [[GH-71] Truncates trailed zeros in second part for local date time fields during decode](https://github.com/th2-net/th2-codec-fix-ng/issues/71)
   + [[GH-82] Unknown / expedited tag cases are handled incorrectly](https://github.com/th2-net/th2-codec-fix-ng/issues/82)
 
 ### 0.1.8

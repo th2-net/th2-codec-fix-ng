@@ -31,20 +31,20 @@ class TimeUtilTest {
     @ParameterizedTest
     @MethodSource("check-and-format-date-time")
     fun `check and format date time`(isoValue: String, expected: String) {
-        assertEquals(expected, checkAndFormat<LocalDateTime>(isoValue))
+        assertEquals(expected, checkAndFormatFix<LocalDateTime>(isoValue))
     }
 
     @ParameterizedTest
     @MethodSource("check-and-format-date-time")
     fun `check and format date time with Z`(isoValue: String, expected: String) {
-        assertEquals(expected, checkAndFormat<LocalDateTime>("${isoValue}Z"))
+        assertEquals(expected, checkAndFormatFix<LocalDateTime>("${isoValue}Z"))
     }
 
     @ParameterizedTest
     @MethodSource("check-and-format-date-time-pico")
     fun `check and format date time with picoseconds`(isoValue: String) {
         assertThrows<DateTimeException> {
-            checkAndFormat<LocalDateTime>(isoValue)
+            checkAndFormatFix<LocalDateTime>(isoValue)
         }.also {
             assertEquals("Text '$isoValue' could not be parsed, unparsed text found at index 29", it.message)
         }
@@ -54,7 +54,7 @@ class TimeUtilTest {
     @MethodSource("check-and-format-date-time-pico")
     fun `check and format date time with picoseconds and Z`(isoValue: String) {
         assertThrows<DateTimeException> {
-            checkAndFormat<LocalDateTime>("${isoValue}Z")
+            checkAndFormatFix<LocalDateTime>("${isoValue}Z")
         }.also {
             assertEquals("Text '${isoValue}Z' could not be parsed, unparsed text found at index 29", it.message)
         }
@@ -63,20 +63,20 @@ class TimeUtilTest {
     @ParameterizedTest
     @MethodSource("check-and-format-time")
     fun `check and format time`(isoValue: String, expected: String) {
-        assertEquals(expected, checkAndFormat<LocalTime>(isoValue))
+        assertEquals(expected, checkAndFormatFix<LocalTime>(isoValue))
     }
 
     @ParameterizedTest
     @MethodSource("check-and-format-time")
     fun `check and format time with Z`(isoValue: String, expected: String) {
-        assertEquals(expected, checkAndFormat<LocalTime>("${isoValue}Z"))
+        assertEquals(expected, checkAndFormatFix<LocalTime>("${isoValue}Z"))
     }
 
     @ParameterizedTest
     @MethodSource("check-and-format-time-pico")
     fun `check and format time with picoseconds`(isoValue: String) {
         assertThrows<DateTimeException> {
-            checkAndFormat<LocalTime>(isoValue)
+            checkAndFormatFix<LocalTime>(isoValue)
         }.also {
             assertEquals("Text '$isoValue' could not be parsed, unparsed text found at index 18", it.message)
         }
@@ -86,7 +86,7 @@ class TimeUtilTest {
     @MethodSource("check-and-format-time-pico")
     fun `check and format time with picoseconds and Z`(isoValue: String) {
         assertThrows<DateTimeException> {
-            checkAndFormat<LocalTime>("${isoValue}Z")
+            checkAndFormatFix<LocalTime>("${isoValue}Z")
         }.also {
             assertEquals("Text '${isoValue}Z' could not be parsed, unparsed text found at index 18", it.message)
         }
@@ -95,13 +95,13 @@ class TimeUtilTest {
     @ParameterizedTest
     @MethodSource("check-and-format-date")
     fun `check and format date`(isoValue: String, expected: String) {
-        assertEquals(expected, checkAndFormat<LocalDate>(isoValue))
+        assertEquals(expected, checkAndFormatFix<LocalDate>(isoValue))
     }
 
     @ParameterizedTest
     @MethodSource("check-and-format-date")
     fun `check and format date with Z`(isoValue: String, expected: String) {
-        assertEquals(expected, checkAndFormat<LocalDate>("${isoValue}Z"))
+        assertEquals(expected, checkAndFormatFix<LocalDate>("${isoValue}Z"))
     }
 
     companion object {

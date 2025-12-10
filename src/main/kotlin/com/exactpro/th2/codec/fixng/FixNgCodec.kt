@@ -437,9 +437,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 java.lang.Float::class.java -> value.toFloat()
                 java.lang.Double::class.java -> value.toDouble()
 
-                java.time.LocalDateTime::class.java -> DATE_TIME_AUTO.parse(value)
-                java.time.LocalDate::class.java -> DATE.parse(value)
-                java.time.LocalTime::class.java -> TIME_AUTO.parse(value)
+                java.time.LocalDateTime::class.java -> DATE_TIME_AUTO.parseFix(value)
+                java.time.LocalDate::class.java -> DATE.parseFix(value)
+                java.time.LocalTime::class.java -> TIME_AUTO.parseFix(value)
 
                 java.lang.Boolean::class.java -> when (value) {
                     "Y" -> true
@@ -456,10 +456,10 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
         }
 
         return if (isDecodeToStrings) {
-            if (primitiveType == java.time.LocalDateTime::class.java || primitiveType == java.time.LocalDate::class.java || primitiveType == java.time.LocalTime::class.java || primitiveType == java.lang.Boolean::class.java) {
-                decodedValue.toString()
-            } else {
-                value
+            when(decodedValue) {
+                is Boolean -> decodedValue.toString()
+                is LocalDateTime, is LocalDate, is LocalTime -> formatIso(value, decodedValue)
+                else -> value
             }
         } else {
             decodedValue
@@ -521,9 +521,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                     value is String -> {
                         try {
                             when (field.primitiveType) {
-                                LocalDateTime::class.java -> checkAndFormat<LocalDateTime>(value)
-                                LocalDate::class.java -> checkAndFormat<LocalDate>(value)
-                                LocalTime::class.java -> checkAndFormat<LocalTime>(value)
+                                LocalDateTime::class.java -> checkAndFormatFix<LocalDateTime>(value)
+                                LocalDate::class.java -> checkAndFormatFix<LocalDate>(value)
+                                LocalTime::class.java -> checkAndFormatFix<LocalTime>(value)
                                 java.lang.Boolean::class.java -> when {
                                     value.equals("true", true) -> true
                                     value.equals("Y", true) -> true // https://github.com/th2-net/th2-codec-fix-ng/issues/43
@@ -549,9 +549,9 @@ class FixNgCodec(dictionary: IDictionaryStructure, settings: FixNgCodecSettings)
                 }
 
                 val stringValue = when (valueToEncode) {
-                    is LocalDateTime -> DATE_TIME_AUTO.format(valueToEncode)
-                    is LocalDate -> DATE.format(valueToEncode)
-                    is LocalTime -> TIME_AUTO.format(valueToEncode)
+                    is LocalDateTime -> DATE_TIME_AUTO.formatFix(valueToEncode)
+                    is LocalDate -> DATE.formatFix(valueToEncode)
+                    is LocalTime -> TIME_AUTO.formatFix(valueToEncode)
                     is java.lang.Boolean -> if (valueToEncode.booleanValue()) "Y" else "N"
                     else -> valueToEncode.toString()
                 }
