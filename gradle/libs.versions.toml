@@ -1,6 +1,6 @@
 [versions]
 kotlin = "2.3.0"
-th2-plugin = "0.3.13"
+th2-plugin = "0.3.14"
 jmh = "1.37"
 
 [libraries]
