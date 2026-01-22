@@ -4,7 +4,7 @@ th2-plugin = "0.3.14"
 jmh = "1.37"
 
 [libraries]
-th2-codec = { group = "com.exactpro.th2", name = "codec", version = "5.6.2-dev" }
+th2-codec = { group = "com.exactpro.th2", name = "codec", version = "5.6.3-dev" }
 
 sailfish-common = { group = "com.exactpro.sf", name = "sailfish-common", version = "3.4.260" }
 commons-beanutils = { group = 'commons-beanutils', name = 'commons-beanutils', version = '1.11.0' } # CVE-2025-48734 vulnerability in 1.9.4 version
